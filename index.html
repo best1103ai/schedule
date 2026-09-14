@@ -386,11 +386,12 @@ function spList(from, to, title){
 
 /* ─── 렌더 ─── */
 function render(){
-  const cal = view !== "notices" && view !== "now";
-  $("prev").style.visibility = cal ? "visible" : "hidden";
-  $("next").style.visibility = cal ? "visible" : "hidden";
-  document.querySelector(".rowseg").style.display = cal ? "flex" : "none";
-  $("toNotice").textContent = cal ? "알림장" : "일정 보기";
+  const inNotice = view === "notices";
+  const arrows   = !inNotice && view !== "now";   // '지금'은 날짜 이동이 없다
+  $("prev").style.visibility = arrows ? "visible" : "hidden";
+  $("next").style.visibility = arrows ? "visible" : "hidden";
+  document.querySelector(".rowseg").style.display = inNotice ? "none" : "flex";
+  $("toNotice").textContent = inNotice ? "일정 보기" : "알림장";
   ({now:renderNow, day:renderDay, d3:renderD3, week:renderWeek, month:renderMonth, quarter:renderQuarter, notices:renderNotices}[view])();
 }
 
