@@ -170,6 +170,27 @@ textarea{min-height:96px;resize:vertical}
 input[type=file]{width:100%;font-size:15px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;background:var(--ink);color:var(--paper);padding:13px 20px;border-radius:999px;font-size:15px;font-weight:700;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
+/* 지금 / 특이사항 */
+.sect{font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.04em;margin:18px 0 8px}
+.splist{margin-top:20px}
+.sp{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+.sp:last-child{border-bottom:none}
+.sp .when{flex:none;width:76px;font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.sp .when.sun{color:#b91c1c}
+.sp .body{min-width:0}
+.sp .ttl{font-size:17px;font-weight:700;letter-spacing:-.02em}
+.sp .meta{font-size:14px;color:var(--soft);margin-top:2px}
+.bdg{display:inline-block;font-size:12px;font-weight:800;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
+.bdg.cancel{background:#fee2e2;color:#991b1b}
+.bdg.add{background:#dbeafe;color:#1e40af}
+.bdg.change{background:#fef3c7;color:#92400e}
+.who-s{font-size:13px;font-weight:800;color:var(--mj)}
+.who-s.mje{color:var(--mje)}
+.mcell{min-height:74px}
+.mcell .n{font-size:16px}
+.mdot{width:8px;height:8px;border-radius:50%;background:var(--mj);margin-top:6px}
+.mdot.mje{background:var(--mje)}
+.mdots{display:flex;gap:3px}
 .banner{background:#fef3c7;color:#92400e;font-size:14px;padding:10px 14px;text-align:center}
 </style>
 </head>
@@ -311,6 +332,38 @@ function eventsOn(date){
 function clean(o){ const r={}; Object.keys(o).forEach(k=>{ if(o[k]!=="" && o[k]!=null) r[k]=o[k]; }); delete r.date; delete r.kind; delete r.targetId; return r; }
 const forKid = (list,k) => list.filter(e => e.kid === k);
 
+/* ─── 평소와 다른 날 ─── */
+function specialsOn(d){
+  const ds = fmt(d);
+  return (DATA.overrides||[]).filter(o => o.date === ds).map(o => {
+    const base = (DATA.schedule||[]).find(s => s.id === o.targetId);
+    const kid  = o.kid || (base && base.kid) || "";
+    const ttl  = o.title || (base && base.title) || "일정";
+    const t    = o.start ? `${o.start}${o.end? "–"+o.end : ""}` : (base ? `${base.start}–${base.end}` : "");
+    return {kid, ttl, t, kind:o.kind, note:o.note||"", place:o.place||(base&&base.place)||""};
+  }).filter(x => !x.kid || shown().includes(x.kid));
+}
+const KINDNAME = {cancel:"휴강", add:"추가", change:"변경"};
+
+function spList(from, to, title){
+  const out = [];
+  for(let d = new Date(from); d <= to; d = add(d,1)){
+    specialsOn(d).forEach(x => out.push({d:new Date(d), x}));
+  }
+  if(!out.length) return `<div class="splist"><div class="sect">${title}</div>
+    <div class="none" style="padding:6px 0">평소와 같습니다.</div></div>`;
+  return `<div class="splist"><div class="sect">${title}</div>` + out.map(({d,x}) => `
+    <div class="sp">
+      <span class="when ${d.getDay()===0?"sun":""}">${d.getMonth()+1}/${d.getDate()} ${DOW[d.getDay()]}</span>
+      <span class="body">
+        <span class="ttl">${x.ttl}<span class="bdg ${x.kind}">${KINDNAME[x.kind]||""}</span></span>
+        <span class="meta">
+          ${x.kid?`<span class="who-s ${x.kid}">${KIDS[x.kid]}</span> · `:""}${[x.t, x.place, x.note].filter(Boolean).join(" · ")}
+        </span>
+      </span>
+    </div>`).join("") + `</div>`;
+}
+
 /* ─── 렌더 ─── */
 function render(){
   const cal = view !== "notices";
@@ -330,7 +383,7 @@ function renderDay(){
   $("period").textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
   let h = "";
 
-  if(isToday(d)) h += nowStrip(ev);
+  if(isToday(d)) h += `<div class="sect">지금</div>` + nowStrip(ev);
 
   const all = ev.filter(e => shown().includes(e.kid) && e.start);
   if(!all.length){
@@ -364,7 +417,7 @@ function renderDay(){
   }).join("");
 
   const nl = isToday(d) ? nowLine(lo, hi, y) : "";
-  h += `<div class="grid">
+  h += `<div class="sect">${isToday(d)? "오늘 하루" : "하루 일정"}</div><div class="grid">
       <div class="gutter" style="padding-top:26px"><div style="position:relative;height:${H}px">${gut}</div></div>
       <div class="lanes">${lanes}${nl}</div>
     </div>`;
@@ -384,10 +437,12 @@ function nowStrip(ev){
     const list = forKid(ev,k).filter(e => !e.off);
     const cur  = list.find(e => mins(e.start) <= n && n < mins(e.end||e.start));
     const nxt  = list.find(e => mins(e.start) > n);
-    const main = cur ? `<b>${cur.title}</b>` : "<b>일정 없음</b>";
+    const done = list.length && !cur && !nxt;
+    const main = cur ? `<b>${cur.title}</b>` : done ? "<b>오늘 일정 끝</b>" : nxt ? "<b>이동 중 · 쉬는 시간</b>" : "<b>오늘은 일정이 없습니다</b>";
     const sub  = cur
-      ? `${timeLabel(cur)}${cur.place? " · "+cur.place : ""}${nxt? ` → 다음 ${nxt.start} ${nxt.title}` : ""}`
-      : (nxt ? `다음 일정 ${nxt.start} ${nxt.title}` : "오늘 남은 일정이 없습니다");
+      ? `${timeLabel(cur)}${cur.place? " · "+cur.place : ""}${nxt? ` → 다음 ${nxt.start} ${nxt.title}` : " · 오늘 마지막 일정"}`
+      : nxt ? `다음 ${nxt.start} ${nxt.title}${nxt.place? " · "+nxt.place : ""}`
+            : done ? "아래에서 하루 전체를 볼 수 있습니다" : "";
     return `<div class="nowcard ${k}"><span class="who">${KIDS[k]}</span>
       <span class="what">${main}<span class="sub">${sub}</span></span></div>`;
   }).join("") + `</div>`;
@@ -437,12 +492,13 @@ function renderMonth(){
     const d = add(start,i);
     if(i>=35 && d.getMonth()!==first.getMonth()) break;
     const out = d.getMonth()!==first.getMonth();
-    const ev = out ? [] : eventsOn(d).filter(e=>shown().includes(e.kid));
-    const bars = ev.slice(0,3).map(e=>`<i class="${e.kid==="mje"?"mje":""}"></i>`).join("");
+    const sp = out ? [] : specialsOn(d);
+    const dots = [...new Set(sp.map(x=>x.kid))].map(k=>`<span class="mdot ${k==="mje"?"mje":""}"></span>`).join("");
     h += `<button class="mcell ${out?"out":""} ${i%7===6?"sun":""} ${isToday(d)?"now":""} ${sel===fmt(d)?"sel":""}" data-d="${fmt(d)}">
-      <div class="n">${d.getDate()}</div><div class="bars">${bars}</div></button>`;
+      <div class="n">${d.getDate()}</div><div class="mdots">${dots}</div></button>`;
   }
   h += "</div>";
+  h += spList(first, new Date(first.getFullYear(), first.getMonth()+1, 0), `${first.getMonth()+1}월에 평소와 다른 날`);
   if(sel){
     const d = new Date(sel+"T00:00:00");
     h += `<div class="detail">${daySection(d,false)}</div>`;
@@ -460,25 +516,11 @@ function renderQuarter(){
   let h = "";
   for(let m=0;m<3;m++){
     const first = new Date(base.getFullYear(), base.getMonth()+m, 1);
-    const start = wStart(first);
-    h += `<section class="qm"><h2>${first.getMonth()+1}월</h2><div class="qgrid">`
-       + ["월","화","수","목","금","토","일"].map(d=>`<div class="qhead">${d}</div>`).join("");
-    for(let i=0;i<42;i++){
-      const d = add(start,i);
-      if(i>=35 && d.getMonth()!==first.getMonth()) break;
-      const out = d.getMonth()!==first.getMonth();
-      const ev = out ? [] : eventsOn(d);
-      const dots = shown().filter(k => ev.some(e=>e.kid===k))
-                    .map(k=>`<i class="${k==="mje"?"mje":""}"></i>`).join("");
-      h += `<button class="qcell ${out?"out":""} ${isToday(d)?"now":""}" data-d="${fmt(d)}">
-        <span>${d.getDate()}</span><span class="qdots">${dots}</span></button>`;
-    }
-    h += "</div></section>";
+    const end   = new Date(base.getFullYear(), base.getMonth()+m+1, 0);
+    const label = m===0 ? "지난달" : m===1 ? "이번 달" : "다음 달";
+    h += spList(first, end, `${label} · ${first.getMonth()+1}월에 평소와 다른 날`);
   }
   viewEl.innerHTML = h;
-  viewEl.querySelectorAll(".qcell").forEach(c => c.onclick = () => {
-    anchor = new Date(c.dataset.d+"T00:00:00"); setView("day");
-  });
 }
 
 /* ── 알림장 ── */
