@@ -139,7 +139,8 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .nlink{display:inline-block;font-weight:800;border-bottom:2px solid var(--ink);padding-bottom:1px}
 
 /* ─── 하단바 ─── */
-.footer{display:flex;gap:8px;margin:28px auto 12px;padding-bottom:env(safe-area-inset-bottom)}
+.footer{display:flex;gap:8px;margin:28px auto 12px}
+.ver{text-align:center;font-size:12px;color:var(--faint);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 .btn{flex:1;padding:15px 8px;border-radius:var(--r);font-size:16px;font-weight:800;text-align:center;border:1.5px solid var(--line);background:var(--card)}
 .btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink);flex:1.6}
 .btn:active{opacity:.8}
@@ -246,6 +247,7 @@ input[type=file]{width:100%;font-size:15px}
   <button class="btn main" id="reqOpen">일정 변경 요청</button>
   <button class="btn" id="toNotice">알림장</button>
 </div>
+<div class="wrap"><div class="ver">v7 · 2026-09-14</div></div>
 
 
 
@@ -726,17 +728,44 @@ function jsonp(params){
     document.body.appendChild(tag);
   });
 }
+/* 지난번 받아둔 일정을 먼저 그려서 기다리지 않게 한다 */
+const CACHE_KEY = "mjmje_schedule_v1";
+function saveCache(d){
+  try{
+    const {requests, ...rest} = d;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({at:Date.now(), d:rest}));
+  }catch(e){}
+}
+function loadCache(){
+  try{
+    const v = localStorage.getItem(CACHE_KEY);
+    if(!v) return null;
+    const o = JSON.parse(v);
+    return o && o.d && o.d.schedule ? o : null;
+  }catch(e){ return null; }
+}
+
 async function refresh(){
   DATA = await jsonp("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
+  saveCache(DATA);
   render();
 }
+
 async function boot(){
+  const c = loadCache();
+  if(c){
+    DATA = {...c.d, requests: []};
+    render();
+    $("banner").textContent = "최신 일정을 확인하는 중입니다.";
+  }
   try{
     await refresh();
     const b = $("banner"); if(b) b.remove();
   }catch(e){
-    $("banner").textContent = "일정을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
-    render();
+    $("banner").textContent = c
+      ? "연결이 안 돼 마지막으로 받은 일정을 보여주고 있습니다."
+      : "일정을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
+    if(!c) render();
   }
   setInterval(() => { if(view==="now") renderNow(); else if(view==="day" && isToday(anchor)) renderDay(); }, 60000);
 }
