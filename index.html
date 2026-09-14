@@ -22,7 +22,7 @@ body{
   background:var(--paper);color:var(--ink);
   font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",Roboto,"Noto Sans KR",sans-serif;
   font-size:17px;line-height:1.45;-webkit-text-size-adjust:100%;
-  padding-bottom:104px;
+  padding-bottom:32px;
 }
 .wrap{max-width:600px;margin:0 auto;padding:0 14px}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
@@ -37,7 +37,7 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .gear{width:48px;height:48px;flex:none;border-radius:var(--r);display:grid;place-items:center;font-size:22px;color:var(--soft)}
 .rowseg{display:flex;gap:8px;padding-bottom:8px;align-items:center}
 .seg{display:flex;background:var(--fill);border-radius:var(--r);padding:3px;flex:1;min-width:0}
-.seg button{flex:1;padding:9px 4px;border-radius:9px;font-size:15px;font-weight:700;color:var(--soft);white-space:nowrap}
+.seg button{flex:1;padding:9px 2px;border-radius:9px;font-size:14px;font-weight:700;color:var(--soft);white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .kids{display:flex;gap:6px;padding-bottom:10px}
 .kid{flex:1;padding:9px 6px;border:1.5px solid var(--line);border-radius:var(--r);font-size:15px;font-weight:700;color:var(--soft);display:flex;align-items:center;justify-content:center;gap:6px}
@@ -67,8 +67,8 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .rules i{position:absolute;left:0;right:0;height:1px;background:var(--line)}
 .blk{position:absolute;left:0;right:0;background:var(--mj-bg);border-left:4px solid var(--mj);border-radius:8px;padding:5px 7px;overflow:hidden;text-align:left}
 .lane.mje .blk{background:var(--mje-bg);border-left-color:var(--mje)}
-.blk .t{font-size:12px;color:var(--soft);font-variant-numeric:tabular-nums;line-height:1.2}
-.blk .n{font-size:14px;font-weight:700;line-height:1.25;letter-spacing:-.02em}
+.blk .n{display:block;font-size:14px;font-weight:700;line-height:1.25;letter-spacing:-.02em}
+.blk .t{display:block;font-size:12px;color:var(--soft);font-variant-numeric:tabular-nums;line-height:1.2;margin-top:1px}
 .blk.off{opacity:.55}
 .blk.off .n{text-decoration:line-through}
 .nowline{position:absolute;left:0;right:0;height:2px;background:var(--now);z-index:5}
@@ -132,8 +132,7 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .nlink{display:inline-block;font-weight:800;border-bottom:2px solid var(--ink);padding-bottom:1px}
 
 /* ─── 하단바 ─── */
-.bottom{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:20}
-.bottom .in{max-width:600px;margin:0 auto;display:flex;gap:8px}
+.footer{display:flex;gap:8px;margin:28px auto 12px;padding-bottom:env(safe-area-inset-bottom)}
 .btn{flex:1;padding:15px 8px;border-radius:var(--r);font-size:16px;font-weight:800;text-align:center;border:1.5px solid var(--line);background:var(--card)}
 .btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink);flex:1.6}
 .btn:active{opacity:.8}
@@ -168,8 +167,20 @@ textarea{min-height:96px;resize:vertical}
 .upload h3{margin:0 0 4px;font-size:16px}
 .upload p{margin:0 0 12px;font-size:14px;color:var(--soft)}
 input[type=file]{width:100%;font-size:15px}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;background:var(--ink);color:var(--paper);padding:13px 20px;border-radius:999px;font-size:15px;font-weight:700;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:40px;background:var(--ink);color:var(--paper);padding:13px 20px;border-radius:999px;font-size:15px;font-weight:700;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
 .toast.on{opacity:1}
+/* 지금 화면 */
+.bigcard{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--mj);border-radius:14px;padding:18px;margin-bottom:12px}
+.bigcard.mje{border-left-color:var(--mje)}
+.bigcard .name{font-size:15px;font-weight:800;color:var(--mj)}
+.bigcard.mje .name{color:var(--mje)}
+.bigcard .doing{font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1.25;margin-top:2px}
+.bigcard .when{font-size:16px;color:var(--soft);margin-top:3px;font-variant-numeric:tabular-nums}
+.bigcard .next{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:16px}
+.bigcard .next b{font-weight:700}
+.bigcard .next span{color:var(--soft)}
+.clock{text-align:center;font-size:14px;color:var(--faint);margin:14px 0 4px;font-variant-numeric:tabular-nums}
+
 /* 지금 / 특이사항 */
 .sect{font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.04em;margin:18px 0 8px}
 .splist{margin-top:20px}
@@ -207,7 +218,8 @@ input[type=file]{width:100%;font-size:15px}
     </div>
     <div class="rowseg">
       <div class="seg" id="seg">
-        <button data-v="day" aria-pressed="true">오늘</button>
+        <button data-v="now" aria-pressed="true">지금</button>
+        <button data-v="day" aria-pressed="false">오늘</button>
         <button data-v="d3" aria-pressed="false">3일</button>
         <button data-v="week" aria-pressed="false">주</button>
         <button data-v="month" aria-pressed="false">월</button>
@@ -223,11 +235,12 @@ input[type=file]{width:100%;font-size:15px}
 </header>
 
 <main class="wrap" id="view"></main>
-
-<div class="bottom"><div class="in">
-  <button class="btn" id="toNotice">알림장</button>
+<div class="wrap footer">
   <button class="btn main" id="reqOpen">일정 변경 요청</button>
-</div></div>
+  <button class="btn" id="toNotice">알림장</button>
+</div>
+
+
 
 <div class="scrim" id="scrim"></div>
 
@@ -291,10 +304,10 @@ const API_URL   = "https://script.google.com/macros/s/AKfycbzZ53Pd1ZWT9bgFgAej2f
 const ADMIN_PIN = "1103";
 
 let DATA = {schedule:[], overrides:[], requests:[], notices:[]};
-let view = "day";
+let view = "now";
 let anchor = new Date();
 let kidMode = "both";
-let sel = null, noticeQ = "", adminPin = "", prevView = "day";
+let sel = null, noticeQ = "", adminPin = "", prevView = "now";
 
 const KIDS = {mj:"민준", mje:"민재"};
 const DOW  = ["일","월","화","수","목","금","토"];
@@ -366,86 +379,101 @@ function spList(from, to, title){
 
 /* ─── 렌더 ─── */
 function render(){
-  const cal = view !== "notices";
+  const cal = view !== "notices" && view !== "now";
   $("prev").style.visibility = cal ? "visible" : "hidden";
   $("next").style.visibility = cal ? "visible" : "hidden";
   document.querySelector(".rowseg").style.display = cal ? "flex" : "none";
   $("toNotice").textContent = cal ? "알림장" : "일정 보기";
-  ({day:renderDay, d3:renderD3, week:renderWeek, month:renderMonth, quarter:renderQuarter, notices:renderNotices}[view])();
+  ({now:renderNow, day:renderDay, d3:renderD3, week:renderWeek, month:renderMonth, quarter:renderQuarter, notices:renderNotices}[view])();
 }
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
 function tagOf(e){ return e.off ? ' <span class="tag">휴강</span>' : e.added ? ' <span class="tag">추가</span>' : e.moved ? ' <span class="tag">변경</span>' : ""; }
 
-/* ── 오늘 : 시간축 2열 ── */
+/* ── 지금 : 큰 카드 ── */
+function renderNow(){
+  anchor = new Date();
+  const now = new Date(), n = now.getHours()*60 + now.getMinutes();
+  const ev = eventsOn(now);
+  $("period").textContent = "지금";
+
+  const cards = shown().map(k => {
+    const list = forKid(ev,k).filter(e => !e.off && e.start);
+    const cur  = list.find(e => mins(e.start) <= n && n < mins(e.end||e.start));
+    const nxt  = list.find(e => mins(e.start) > n);
+    const doing = cur ? cur.title
+                : list.length && !nxt ? "오늘 일정 끝"
+                : list.length ? "이동 중 · 쉬는 시간"
+                : "오늘은 일정이 없습니다";
+    const when = cur ? `${timeLabel(cur)}${cur.place? " · "+cur.place : ""}` : "";
+    const next = nxt ? `<div class="next"><span>다음</span> <b>${nxt.start} ${nxt.title}</b>${nxt.place? ` <span>· ${nxt.place}</span>`:""}</div>` : "";
+    return `<div class="bigcard ${k}">
+      <div class="name">${KIDS[k]}</div>
+      <div class="doing">${doing}</div>
+      ${when?`<div class="when">${when}</div>`:""}
+      ${next}</div>`;
+  }).join("");
+
+  viewEl.innerHTML = `<div class="clock">${now.getMonth()+1}월 ${now.getDate()}일 (${DOW[now.getDay()]}) ${pad(now.getHours())}:${pad(now.getMinutes())} 기준</div>${cards}`;
+}
+
+/* ── 오늘 : 시간축 2열 (눈금은 일정의 시작·끝 시각만) ── */
 function renderDay(){
   const d = anchor, ev = eventsOn(d);
   $("period").textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
-  let h = "";
-
-  if(isToday(d)) h += `<div class="sect">지금</div>` + nowStrip(ev);
 
   const all = ev.filter(e => shown().includes(e.kid) && e.start);
   if(!all.length){
-    viewEl.innerHTML = h + '<div class="none" style="padding:28px 0">일정이 없습니다.</div>';
+    viewEl.innerHTML = '<div class="none" style="padding:32px 0">일정이 없습니다.</div>';
     return;
   }
-  let lo = Math.min(...all.map(e => mins(e.start)));
-  let hi = Math.max(...all.map(e => mins(e.end || e.start) || 0));
-  lo = Math.floor(lo/60)*60 - 30; hi = Math.ceil(hi/60)*60 + 30;
-  const PPM = 1.15, H = (hi-lo)*PPM;
-  const y = m => (m-lo)*PPM;
 
-  let gut = "", rules = "";
-  for(let m = Math.ceil(lo/60)*60; m <= hi; m += 60){
-    gut   += `<span class="h" style="top:${y(m)}px">${pad(m/60)}:00</span>`;
-    rules += `<i style="top:${y(m)}px"></i>`;
-  }
+  // 일정의 시작·끝 시각만 눈금으로 쓴다. 긴 수업의 중간 시간은 접힌다.
+  const pts = [...new Set(all.flatMap(e => [mins(e.start), mins(e.end||e.start)]))].sort((a,b)=>a-b);
+  const busy = (a,b) => all.some(e => mins(e.start) <= a && mins(e.end||e.start) >= b);
+  const yAt = {}; let y = 0;
+  pts.forEach((p,i) => { yAt[p] = y; if(i < pts.length-1) y += busy(p, pts[i+1]) ? 58 : 26; });
+  const H = y;
+  const pos = m => {
+    if(yAt[m] !== undefined) return yAt[m];
+    for(let i=0;i<pts.length-1;i++){
+      if(m >= pts[i] && m <= pts[i+1]){
+        const f = (m-pts[i]) / (pts[i+1]-pts[i]);
+        return yAt[pts[i]] + f*(yAt[pts[i+1]] - yAt[pts[i]]);
+      }
+    }
+    return m < pts[0] ? 0 : H;
+  };
+  const hhmm = m => `${pad(Math.floor(m/60))}:${pad(m%60)}`;
+
+  const gut   = pts.map(p => `<span class="h" style="top:${yAt[p]}px">${hhmm(p)}</span>`).join("");
+  const rules = pts.map(p => `<i style="top:${yAt[p]}px"></i>`).join("");
 
   const lanes = shown().map(k => {
     const blocks = forKid(all,k).map(e => {
-      const a = mins(e.start), b = Math.max(mins(e.end||e.start), a+30);
-      return `<button class="blk ${e.off?"off":""}" data-ev="${enc(e)}"
-        style="top:${y(a)}px;height:${(b-a)*PPM-3}px">
-        <span class="t">${timeLabel(e)}</span>
-        <span class="n">${e.title}</span></button>`;
+      const a = mins(e.start), b = mins(e.end||e.start);
+      const top = pos(a), h = Math.max(pos(b)-top-3, 26);
+      return `<button class="blk ${e.off?"off":""}" data-ev="${enc(e)}" style="top:${top}px;height:${h}px">
+        <span class="n">${e.title}</span>
+        <span class="t">${timeLabel(e)}</span></button>`;
     }).join("");
     return `<div class="lane ${k}">
       <div class="lanehead ${k}">${KIDS[k]}</div>
-      <div style="position:relative;height:${H}px"><div class="rules">${rules}</div>${blocks}</div>
+      <div style="position:relative;height:${H+8}px"><div class="rules">${rules}</div>${blocks}</div>
     </div>`;
   }).join("");
 
-  const nl = isToday(d) ? nowLine(lo, hi, y) : "";
-  h += `<div class="sect">${isToday(d)? "오늘 하루" : "하루 일정"}</div><div class="grid">
-      <div class="gutter" style="padding-top:26px"><div style="position:relative;height:${H}px">${gut}</div></div>
+  let nl = "";
+  if(isToday(d)){
+    const n = new Date().getHours()*60 + new Date().getMinutes();
+    if(n >= pts[0] && n <= pts[pts.length-1]) nl = `<div class="nowline" style="top:${pos(n)+26}px"></div>`;
+  }
+
+  viewEl.innerHTML = `<div class="grid">
+      <div class="gutter" style="padding-top:26px"><div style="position:relative;height:${H+8}px">${gut}</div></div>
       <div class="lanes">${lanes}${nl}</div>
     </div>`;
-  viewEl.innerHTML = h;
   bindEv();
-}
-
-function nowLine(lo, hi, y){
-  const n = new Date().getHours()*60 + new Date().getMinutes();
-  if(n < lo || n > hi) return "";
-  return `<div class="nowline" style="top:${y(n)+26}px"></div>`;
-}
-
-function nowStrip(ev){
-  const n = new Date().getHours()*60 + new Date().getMinutes();
-  return `<div class="nowstrip">` + shown().map(k => {
-    const list = forKid(ev,k).filter(e => !e.off);
-    const cur  = list.find(e => mins(e.start) <= n && n < mins(e.end||e.start));
-    const nxt  = list.find(e => mins(e.start) > n);
-    const done = list.length && !cur && !nxt;
-    const main = cur ? `<b>${cur.title}</b>` : done ? "<b>오늘 일정 끝</b>" : nxt ? "<b>이동 중 · 쉬는 시간</b>" : "<b>오늘은 일정이 없습니다</b>";
-    const sub  = cur
-      ? `${timeLabel(cur)}${cur.place? " · "+cur.place : ""}${nxt? ` → 다음 ${nxt.start} ${nxt.title}` : " · 오늘 마지막 일정"}`
-      : nxt ? `다음 ${nxt.start} ${nxt.title}${nxt.place? " · "+nxt.place : ""}`
-            : done ? "아래에서 하루 전체를 볼 수 있습니다" : "";
-    return `<div class="nowcard ${k}"><span class="who">${KIDS[k]}</span>
-      <span class="what">${main}<span class="sub">${sub}</span></span></div>`;
-  }).join("") + `</div>`;
 }
 
 /* ── 3일 / 주 : 날짜별 2열 ── */
@@ -702,7 +730,7 @@ async function boot(){
     $("banner").textContent = "일정을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
     render();
   }
-  setInterval(() => { if(view==="day" && isToday(anchor)) renderDay(); }, 60000);
+  setInterval(() => { if(view==="now") renderNow(); else if(view==="day" && isToday(anchor)) renderDay(); }, 60000);
 }
 boot();
 </script>
