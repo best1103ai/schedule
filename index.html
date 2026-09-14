@@ -326,7 +326,7 @@ const isToday = d => fmt(d)===fmt(new Date());
 
 /* ── 일정 계산 ── */
 function eventsOn(date){
-  const ds = fmt(date), w = idx(date);
+  const ds = fmt(date), w = date.getDay();   // 일=0 … 토=6
   const ov = (DATA.overrides||[]).filter(o=>o.date===ds);
   let list = [];
 
@@ -522,8 +522,9 @@ $("rSend").onclick = async () => {
   };
   if(API_URL){
     try{
-      await fetch(API_URL, {method:"POST", body:JSON.stringify({action:"addRequest", req})});
+      await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({action:"addRequest", req})});
       toast("요청을 보냈습니다");
+      if(adminPin) { await refresh(); renderRequests(); }
     }catch(e){ toast("전송 실패. 잠시 뒤 다시 시도해 주세요"); return; }
   }else{
     DATA.requests.unshift(req);
@@ -565,7 +566,8 @@ async function decide(id, status){
   const r = DATA.requests.find(x=>x.id===id); if(!r) return;
   r.status = status;
   if(API_URL){
-    try{ await fetch(API_URL,{method:"POST", body:JSON.stringify({action:"setStatus", id, status, pin:adminPin})}); }
+    try{ await fetch(API_URL,{method:"POST", mode:"no-cors",
+      body:JSON.stringify({action:"setStatus", id, status, pin:adminPin})}); }
     catch(e){ toast("저장 실패"); }
   }
   renderRequests();
@@ -585,22 +587,32 @@ $("uSend").onclick = async () => {
     r.readAsDataURL(f);
   });
   try{
-    const res = await fetch(API_URL, {method:"POST", body:JSON.stringify({
+    const before = (DATA.notices||[]).length;
+    await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({
       action:"uploadNotice", pin:adminPin, kid:$("uKid").value, mime:f.type, data
     })});
-    const out = await res.json();
-    if(out.error){ toast("올리지 못했습니다"); return; }
     $("uFile").value = "";
     await refresh(); renderRequests();
-    toast(out.events ? `일정 ${out.events}건이 요청함에 올라왔습니다` : "알림장을 보관했습니다");
+    toast((DATA.notices||[]).length > before ? "알림장을 보관했습니다" : "올렸습니다. 잠시 후 목록에 나타납니다");
   }catch(e){ toast("올리지 못했습니다"); }
 };
 
 /* ── 데이터 불러오기 ── */
+function jsonp(params){
+  return new Promise((ok, fail) => {
+    const cb = "cb" + Date.now() + Math.floor(Math.random()*1000);
+    const tag = document.createElement("script");
+    const timer = setTimeout(()=>{ done(); fail(new Error("timeout")); }, 30000);
+    function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
+    window[cb] = d => { done(); ok(d); };
+    tag.onerror = () => { done(); fail(new Error("network")); };
+    tag.src = API_URL + "?" + params + "&callback=" + cb;
+    document.body.appendChild(tag);
+  });
+}
+
 async function refresh(){
-  const url = API_URL + "?action=all" + (adminPin ? "&pin=" + encodeURIComponent(adminPin) : "");
-  const res = await fetch(url);
-  DATA = await res.json();
+  DATA = await jsonp("action=all" + (adminPin ? "&pin=" + encodeURIComponent(adminPin) : ""));
   render();
 }
 
