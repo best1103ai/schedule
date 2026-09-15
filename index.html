@@ -139,7 +139,24 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .nlink{display:inline-block;font-weight:800;border-bottom:2px solid var(--ink);padding-bottom:1px}
 
 /* ─── 하단바 ─── */
-.footer{display:flex;gap:8px;margin:28px auto 12px}
+.footer{display:flex;gap:8px;margin:28px auto 10px}
+.footer2{margin:0 auto 12px}
+/* 할일 */
+.todo{display:flex;align-items:flex-start;border-bottom:1px solid var(--line);width:100%}
+.todo .hit{flex:1;display:flex;gap:12px;align-items:flex-start;padding:14px 2px;text-align:left;min-width:0}
+.todo .del{flex:none;width:40px;align-self:stretch;color:var(--faint);font-size:17px}
+.todo .del:active{color:var(--ink)}
+.todo:last-child{border-bottom:none}
+.box{width:26px;height:26px;flex:none;border:2px solid var(--line);border-radius:8px;display:grid;place-items:center;font-size:15px;color:transparent;margin-top:1px}
+.todo.done .box{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.todo .tx{display:block;font-size:17px;font-weight:600;letter-spacing:-.02em;line-height:1.35}
+.todo.done .tx{text-decoration:line-through;color:var(--faint);font-weight:500}
+.todo .sub2{display:block;font-size:13px;color:var(--soft);margin-top:3px}
+.todo .sub2 .late{color:#b91c1c;font-weight:800}
+.todo .kb{font-size:12px;font-weight:800;color:var(--mj)}
+.todo .kb.mje{color:var(--mje)}
+.todosum{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-top:12px;font-size:16px;font-weight:700}
+.todosum span{color:var(--soft);font-weight:500}
 .ver{text-align:center;font-size:12px;color:var(--faint);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 .btn{flex:1;padding:15px 8px;border-radius:var(--r);font-size:16px;font-weight:800;text-align:center;border:1.5px solid var(--line);background:var(--card)}
 .btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink);flex:1.6}
@@ -252,10 +269,13 @@ input[type=file]{width:100%;font-size:15px}
 
 <main class="wrap" id="view"></main>
 <div class="wrap footer">
-  <button class="btn main" id="reqOpen">일정 변경 요청</button>
+  <button class="btn" id="toTodo">할일</button>
   <button class="btn" id="toNotice">알림장</button>
 </div>
-<div class="wrap"><div class="ver">v10 · 2026-09-15</div></div>
+<div class="wrap footer2">
+  <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
+</div>
+<div class="wrap"><div class="ver">v12 · 2026-09-15</div></div>
 
 
 
@@ -285,6 +305,23 @@ input[type=file]{width:100%;font-size:15px}
   <h2>요청함</h2>
   <p class="sub" id="adminSub"></p>
   <div id="reqList"></div>
+</div></div>
+
+<div class="sheet" id="sheetTodo"><div class="in">
+  <div class="grip"></div>
+  <h2>할일 추가</h2>
+  <p class="sub">숙제, 준비물, 사인처럼 날짜보다 '해야 할 일'이 중요한 것들입니다.</p>
+  <label for="tText">내용</label>
+  <textarea id="tText" placeholder="예: 국어 73쪽 숙제 부모님 사인"></textarea>
+  <div class="row2">
+    <div><label for="tKid">누구 것</label>
+      <select id="tKid"><option value="mj">민준</option><option value="mje">민재</option><option value="both">공통</option></select></div>
+    <div><label for="tWho">담당</label>
+      <select id="tWho"><option>누구나</option><option>민준</option><option>민재</option><option>아빠</option><option>아라</option><option>할아버지</option><option>할머니</option></select></div>
+  </div>
+  <label for="tDue">마감 (비워도 됩니다)</label>
+  <input type="date" id="tDue">
+  <button class="btn main" id="tSend" style="margin-top:20px;width:100%">추가</button>
 </div></div>
 
 <div class="sheet" id="sheetUpload"><div class="in">
@@ -320,7 +357,7 @@ input[type=file]{width:100%;font-size:15px}
 const API_URL   = "https://script.google.com/macros/s/AKfycbzZ53Pd1ZWT9bgFgAej2fNLR_fJBYu9cBb2fKh2ME_WKe_Gd06k4cNguiao4QktLbA7-Q/exec";
 const ADMIN_PIN = "1103";
 
-let DATA = {schedule:[], overrides:[], requests:[], notices:[]};
+let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holidays:[]};
 let view = "now";
 let anchor = new Date();
 let kidMode = "both";
@@ -408,14 +445,15 @@ function spList(from, to, title){
 
 /* ─── 렌더 ─── */
 function render(){
-  const inNotice = view === "notices";
-  // 지금·오늘·내일은 날짜가 고정이라 화살표가 없다
-  const arrows   = !inNotice && !["now","day","tmr"].includes(view);
+  const list   = view === "notices" || view === "todos";   // 목록 화면은 달력 조작이 없다
+  const arrows = !list && !["now","day","tmr"].includes(view);
   $("prev").style.visibility = arrows ? "visible" : "hidden";
   $("next").style.visibility = arrows ? "visible" : "hidden";
-  document.querySelector(".rowseg").style.display = inNotice ? "none" : "flex";
-  $("toNotice").textContent = inNotice ? "일정 보기" : "알림장";
-  ({now:renderNow, day:renderDay, tmr:renderDay, d3:renderD3, week:renderWeek, month:renderMonth, notices:renderNotices}[view])();
+  document.querySelector(".rowseg").style.display = list ? "none" : "flex";
+  $("toNotice").textContent = view === "notices" ? "일정 보기" : "알림장";
+  $("toTodo").textContent   = view === "todos"   ? "일정 보기" : "할일";
+  ({now:renderNow, day:renderDay, tmr:renderDay, d3:renderD3, week:renderWeek,
+    month:renderMonth, notices:renderNotices, todos:renderTodos}[view])();
 }
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
@@ -464,7 +502,14 @@ function renderNow(){
       ${next}</div>`;
   }).join("");
 
-  viewEl.innerHTML = `<div class="clock">${now.getMonth()+1}월 ${now.getDate()}일 (${DOW[now.getDay()]})${hol? " · "+hol : ""} ${pad(now.getHours())}:${pad(now.getMinutes())} 기준</div>${cards}`;
+  const td = openTodos();
+  const soon = td.filter(t => t.due && new Date(t.due+"T00:00:00") <= new Date(fmt(now)+"T00:00:00"));
+  const sum = td.length
+    ? `<button class="todosum" id="sumTodo">할일 ${td.length}건<span>${soon.length? ` · 오늘까지 ${soon.length}건` : " · 급한 건 없음"}</span></button>`
+    : "";
+
+  viewEl.innerHTML = `<div class="clock">${now.getMonth()+1}월 ${now.getDate()}일 (${DOW[now.getDay()]})${hol? " · "+hol : ""} ${pad(now.getHours())}:${pad(now.getMinutes())} 기준</div>${cards}${sum}`;
+  if(td.length) $("sumTodo").onclick = () => { prevView = "now"; setView("todos"); };
 }
 
 /* ── 오늘 : 시간축 2열 (눈금은 일정의 시작·끝 시각만) ── */
@@ -590,6 +635,70 @@ function renderMonth(){
   bindEv();
 }
 
+/* ── 할일 ── */
+function openTodos(){ return (DATA.todos||[]).filter(t => !t.done && (t.kid==="both" || shown().includes(t.kid))); }
+
+function dueLabel(due){
+  if(!due) return "기한 없음";
+  const d = new Date(due+"T00:00:00"), t = new Date(); t.setHours(0,0,0,0);
+  const gap = Math.round((d-t)/86400000);
+  if(gap < 0)  return `<span class="late">${-gap}일 지남</span>`;
+  if(gap === 0) return "<b>오늘까지</b>";
+  if(gap === 1) return "내일까지";
+  return `${d.getMonth()+1}/${d.getDate()}까지`;
+}
+
+function renderTodos(){
+  $("period").textContent = "할일";
+  const all = (DATA.todos||[]).filter(t => t.kid==="both" || shown().includes(t.kid));
+  const open = all.filter(t => !t.done);
+  const done = all.filter(t => t.done);
+
+  const key = t => t.due ? new Date(t.due+"T00:00:00").getTime() : Infinity;  // 기한 없는 건 맨 뒤로
+  open.sort((a,b) => key(a)-key(b));
+
+  const item = t => `<div class="todo ${t.done?"done":""}">
+      <button class="hit" data-t="${t.id}">
+        <span class="box">✓</span>
+        <span>
+          <span class="tx">${t.text}</span>
+          <span class="sub2">${t.kid!=="both"?`<span class="kb ${t.kid}">${KIDS[t.kid]}</span> · `:""}${dueLabel(t.due)}${t.who&&t.who!=="누구나"?` · ${t.who}`:""}${t.from==="알림장"?" · 알림장":""}</span>
+        </span>
+      </button>
+      <button class="del" data-x="${t.id}" aria-label="지우기">✕</button>
+    </div>`;
+
+  viewEl.innerHTML =
+    `<button class="btn" id="todoAdd" style="width:100%;margin:14px 0 4px">할일 추가</button>`
+    + (open.length ? open.map(item).join("") : '<div class="none" style="padding:24px 0">남은 할일이 없습니다.</div>')
+    + (done.length ? `<div class="sect">끝낸 일 ${done.length}건</div>` + done.slice(-10).map(item).join("") : "");
+
+  $("todoAdd").onclick = () => { $("tDue").value = ""; show("sheetTodo"); };
+  viewEl.querySelectorAll("[data-t]").forEach(b => b.onclick = () => toggleTodo(b.dataset.t));
+  viewEl.querySelectorAll("[data-x]").forEach(b => b.onclick = () => removeTodo(b.dataset.x));
+}
+
+async function toggleTodo(id){
+  const t = (DATA.todos||[]).find(x => x.id === id); if(!t) return;
+  t.done = !t.done;
+  renderTodos();
+  try{
+    await fetch(API_URL, {method:"POST", mode:"no-cors",
+      body:JSON.stringify({action:"setTodo", id, done:t.done})});
+  }catch(e){ toast("저장하지 못했습니다"); }
+}
+
+async function removeTodo(id){
+  const t = (DATA.todos||[]).find(x => x.id === id); if(!t) return;
+  if(!confirm(`지울까요?\n\n${t.text}`)) return;
+  DATA.todos = DATA.todos.filter(x => x.id !== id);
+  renderTodos();
+  try{
+    await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({action:"delTodo", id})});
+    toast("지웠습니다");
+  }catch(e){ toast("지우지 못했습니다"); }
+}
+
 /* ── 알림장 ── */
 function renderNotices(){
   $("period").textContent = "알림장";
@@ -664,6 +773,10 @@ $("toNotice").onclick = () => {
   if(view === "notices") setView(prevView);
   else { prevView = view; setView("notices"); }
 };
+$("toTodo").onclick = () => {
+  if(view === "todos") setView(prevView);
+  else { prevView = view; setView("todos"); }
+};
 
 /* ─── 시트 ─── */
 let openSheet = null;
@@ -686,6 +799,20 @@ $("rSend").onclick = async () => {
     $("rText").value = ""; hide();
     if(adminPin){ await refresh(); renderRequests(); }
   }catch(e){ toast("보내지 못했습니다. 잠시 뒤 다시 시도해 주세요"); }
+};
+
+/* ─── 할일 추가 ─── */
+$("tSend").onclick = async () => {
+  const text = $("tText").value.trim();
+  if(!text){ toast("내용을 적어주세요"); return; }
+  const todo = {id:"t"+Date.now(), kid:$("tKid").value, text,
+                who:$("tWho").value, due:$("tDue").value, from:"직접 입력"};
+  try{
+    await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({action:"addTodo", todo})});
+    $("tText").value = ""; hide();
+    DATA.todos = (DATA.todos||[]).concat({...todo, done:false, from:"직접 입력"});
+    render(); toast("할일을 추가했습니다");
+  }catch(e){ toast("추가하지 못했습니다"); }
 };
 
 /* ─── 관리자 ─── */
