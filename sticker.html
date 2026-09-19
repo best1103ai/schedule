@@ -314,8 +314,10 @@ function dadView(){
 
   const boardsHtml = KIDS.map(kid => `<h3 style="margin-top:10px">${kid}</h3>` + boardsOf(kid).map(b => {
     const key = kid+'|'+b.항목, ed = V.edit === key;
-    return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span>${esc(b.항목)}</span><span class="c">${b.cur}/${b.목표}</span><button class="btn ghost sm" data-act="edit" data-v="${esc(key)}">${ed?'닫기':'수정'}</button></div>` +
-      (ed ? `<div class="editor"><label>목표 스티커 수</label><div class="form"><input type="number" id="et" value="${b.목표}" min="1"><input type="text" id="er" placeholder="바꾸는 이유 (예: 민재 동기부여)"></div>
+    const newBoard = Number(b.목표) === -1;
+    const displayTarget = newBoard ? '📌 목표 설정 필요' : `${b.cur}/${b.목표}`;
+    return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span>${esc(b.항목)}</span><span class="c">${displayTarget}</span><button class="btn ghost sm" data-act="edit" data-v="${esc(key)}">${ed?'닫기':'수정'}</button></div>` +
+      (ed ? `<div class="editor"><label>목표 스티커 수</label><div class="form"><input type="number" id="et" value="${newBoard?100:b.목표}" min="1"><input type="text" id="er" placeholder="바꾸는 이유 (예: 민재 동기부여)"></div>
         <label>시작값 (앱 쓰기 전에 이미 붙인 스티커 수)</label><div class="form"><input type="number" id="es" value="${b.시작값}" min="0"><button class="btn" data-act="saveb" data-v="${esc(key)}">저장</button></div></div>` : '');
   }).join('')).join('');
 
