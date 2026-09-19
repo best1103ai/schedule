@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" style="background:#faf9f7">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
@@ -12,7 +12,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="민준민재">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<meta name="color-scheme" content="light">
+<!-- 글꼴은 화면을 그린 뒤에 입힌다. 기다리는 동안 기본 글꼴로 먼저 보인다. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+      media="print" onload="this.media='all';this.onload=null">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"></noscript>
 <style>
 :root{
   --paper:#faf9f7; --card:#fff;
@@ -24,7 +28,7 @@
   --r:12px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;background:#faf9f7}
 body{
   background:var(--paper);color:var(--ink);
   font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",Roboto,"Noto Sans KR",sans-serif;
@@ -161,6 +165,7 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .btn{flex:1;padding:15px 8px;border-radius:var(--r);font-size:16px;font-weight:800;text-align:center;border:1.5px solid var(--line);background:var(--card)}
 .btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink);flex:1.6}
 .btn:active{opacity:.8}
+.btn:disabled{opacity:.45}
 
 /* ─── 시트 ─── */
 .scrim{position:fixed;inset:0;background:rgba(23,24,28,.45);z-index:30;display:none}
@@ -200,6 +205,17 @@ input[type=file]{width:100%;font-size:15px}
 .bigcard .prev{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);font-size:15px;color:var(--soft)}
 .bigcard .prev b{font-weight:700;color:var(--ink)}
 
+/* 오늘 게임 배너 */
+.gamebar{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:13px 14px;margin:14px 0 2px}
+.gamebar .glabel{font-size:16px;font-weight:800;letter-spacing:-.02em;flex:none}
+.gamebar .gchips{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.gchip{font-size:14px;font-weight:700;padding:4px 10px;border-radius:999px;
+  background:var(--fill);color:var(--faint);white-space:nowrap}
+.gchip.ok.mj{background:var(--mj-bg);color:var(--mj)}
+.gchip.ok.mje{background:var(--mje-bg);color:var(--mje)}
+
 /* 지금 화면 */
 .bigcard{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--mj);border-radius:14px;padding:18px;margin-bottom:12px}
 .bigcard.mje{border-left-color:var(--mje)}
@@ -235,6 +251,10 @@ input[type=file]{width:100%;font-size:15px}
 .mdot{width:8px;height:8px;border-radius:50%;background:var(--mj);margin-top:6px}
 .mdot.mje{background:var(--mje)}
 .mdots{display:flex;gap:3px}
+.skel{padding-top:16px}
+.skel i{display:block;height:92px;border-radius:14px;background:var(--fill);margin-bottom:12px;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.skel i{animation:none}}
 .banner{background:#fef3c7;color:#92400e;font-size:14px;padding:10px 14px;text-align:center}
 </style>
 </head>
@@ -267,7 +287,7 @@ input[type=file]{width:100%;font-size:15px}
   </div>
 </header>
 
-<main class="wrap" id="view"></main>
+<main class="wrap" id="view"><div class="skel"><i></i><i></i></div></main>
 <div class="wrap footer">
   <button class="btn" id="toTodo">할일</button>
   <button class="btn" id="toNotice">알림장</button>
@@ -275,7 +295,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v12 · 2026-09-15</div></div>
+<div class="wrap"><div class="ver">v15 · 2026-09-19</div></div>
 
 
 
@@ -356,6 +376,8 @@ input[type=file]{width:100%;font-size:15px}
    ══════════════════════════════════════════ */
 const API_URL   = "https://script.google.com/macros/s/AKfycbzZ53Pd1ZWT9bgFgAej2fNLR_fJBYu9cBb2fKh2ME_WKe_Gd06k4cNguiao4QktLbA7-Q/exec";
 const ADMIN_PIN = "1103";
+// 스티커판 Apps Script 웹앱 주소. 비워두면 게임 배너는 조용히 뜨지 않는다.
+const STICKER_API = "";
 
 let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holidays:[]};
 let view = "now";
@@ -454,6 +476,7 @@ function render(){
   $("toTodo").textContent   = view === "todos"   ? "일정 보기" : "할일";
   ({now:renderNow, day:renderDay, tmr:renderDay, d3:renderD3, week:renderWeek,
     month:renderMonth, notices:renderNotices, todos:renderTodos}[view])();
+  addGameBar();
 }
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
@@ -851,28 +874,76 @@ async function decide(id, status){
 }
 
 /* ─── 알림장 업로드 ─── */
+let uploading = false;
 $("uSend").onclick = async () => {
+  if(uploading) return;                       // 두 번 눌러 중복 등록되는 것을 막는다
   const f = $("uFile").files[0];
   if(!f){ toast("캡처를 먼저 고르세요"); return; }
-  toast("읽는 중입니다. 10초쯤 걸립니다");
+
+  const kid = $("uKid").value;
   const data = await new Promise((ok,no) => {
     const r = new FileReader();
     r.onload = () => ok(r.result.split(",")[1]);
     r.onerror = no; r.readAsDataURL(f);
   });
+
+  // 읽는 데 10초쯤 걸린다. 화면을 붙잡아두지 않고 먼저 닫는다.
+  uploading = true;
+  $("uSend").disabled = true;
+  $("uFile").value = "";
+  hide();
+  toast("올리는 중입니다. 10초쯤 걸립니다");
+
   try{
     const before = (DATA.notices||[]).length;
     await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({
-      action:"uploadNotice", kid:$("uKid").value, mime:f.type, data })});
-    $("uFile").value = ""; hide();
+      action:"uploadNotice", kid, mime:f.type, data })});
     await refresh();
     if(adminPin) renderRequests();
     toast((DATA.notices||[]).length > before ? "알림장을 보관했습니다" : "올렸습니다. 잠시 후 목록에 나타납니다");
-  }catch(e){ toast("올리지 못했습니다"); }
+  }catch(e){
+    toast("올리지 못했습니다");
+  }finally{
+    uploading = false;
+    $("uSend").disabled = false;
+  }
 };
 
+/* ─── 오늘 게임 배너 (스티커판에서 가져온다) ─── */
+let GAME = null;
+
+async function loadGame(){
+  if(!STICKER_API) return;
+  try{
+    GAME = await jsonp("game=1", STICKER_API);
+  }catch(e){ GAME = null; }
+  addGameBar();
+}
+
+function addGameBar(){
+  const old = document.getElementById("gamebar");
+  if(old) old.remove();
+
+  // 지금 화면, 그리고 '오늘'이 실제로 오늘일 때만
+  const here = view === "now" || (view === "day" && isToday(anchor));
+  if(!here || !GAME || !GAME.game) return;
+  if(GAME.today !== fmt(new Date())) return;        // 자정을 넘겼으면 숨긴다
+
+  const chips = shown().map(k => {
+    const ok = !!GAME.game[KIDS[k]];
+    return `<span class="gchip ${k} ${ok?"ok":""}">${KIDS[k]} ${ok?"가능":"아직"}</span>`;
+  }).join("");
+
+  const bar = document.createElement("button");
+  bar.id = "gamebar";
+  bar.className = "gamebar";
+  bar.innerHTML = `<span class="glabel">🎮 오늘 게임</span><span class="gchips">${chips}</span>`;
+  bar.onclick = () => { location.href = "./sticker.html"; };
+  viewEl.prepend(bar);
+}
+
 /* ─── 데이터 ─── */
-function jsonp(params){
+function jsonp(params, base){
   return new Promise((ok, fail) => {
     const cb = "cb" + Date.now() + Math.floor(Math.random()*1000);
     const tag = document.createElement("script");
@@ -880,7 +951,7 @@ function jsonp(params){
     function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
     window[cb] = d => { done(); ok(d); };
     tag.onerror = () => { done(); fail(new Error("network")); };
-    tag.src = API_URL + "?" + params + "&callback=" + cb;
+    tag.src = (base || API_URL) + "?" + params + "&callback=" + cb;
     document.body.appendChild(tag);
   });
 }
@@ -923,7 +994,16 @@ async function boot(){
       : "일정을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
     if(!c) render();
   }
-  setInterval(() => { if(view==="now") renderNow(); else if(view==="day" && isToday(anchor)) renderDay(); }, 60000);
+  setInterval(() => {
+    if(view==="now") { renderNow(); addGameBar(); }
+    else if(view==="day" && isToday(anchor)) { renderDay(); addGameBar(); }
+  }, 60000);
+
+  loadGame();
+  setInterval(loadGame, 300000);                                  // 5분마다
+  document.addEventListener("visibilitychange", () => {           // 화면 복귀 시
+    if(!document.hidden) loadGame();
+  });
 }
 boot();
 </script>
