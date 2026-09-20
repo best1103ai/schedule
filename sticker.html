@@ -286,9 +286,10 @@ function boardView(kid){
   if(pk && pk.붕괴) return `<section class="card"><h3>⚠️ 스티커판이 쉬고 있어요</h3><p class="empty">칭찬을 ${pk.회복칭찬}/10개 모으면 다시 시작해요. 아빠한테 잘한 일을 알려주세요!</p></section>`;
   const g = giftInfo(kid);
   const pct = g.need ? Math.min(100, Math.max(0, g.avail) / g.need * 100) : 0;
-  const head = `<section class="gifts"><div><div class="n">${g.avail}</div><div class="l">받을 선물</div></div>
-    <div class="big"><div class="l"><span>${g.y}년 큰 선물</span><span>${Math.max(0,g.avail)} / ${g.need}</span></div><div class="gbar"><i style="width:${pct}%"></i></div>
-    <div class="l" style="margin-top:6px">지금까지 판 ${g.earned}개 완성 · 선물 ${g.used}개 사용</div></div></section>`;
+  const bigHtml = g.need > 0 ? `<div class="big"><div class="l"><span>${g.y}년 큰 선물까지</span><span>${Math.max(0,g.avail)} / ${g.need}</span></div><div class="gbar"><i style="width:${pct}%"></i></div>
+    <div class="l" style="margin-top:4px">작은 선물이 ${g.need}개 모이면 핸드폰 같은 큰 선물로 바꿔줄 수 있어요</div></div>` : '';
+  const head = `<section class="gifts"><div><div class="n">${g.avail}</div><div class="l">안 쓴 선물 (이미 얻었어요)</div></div>${bigHtml}
+    <div class="l" style="margin-top:6px">지금까지 판 ${g.earned}개 완성 · 선물 ${g.used}개 사용</div></section>`;
   const cards = boardsOf(kid).map(b => {
     const open = V.open === b.항목, p = b.목표 ? Math.min(100, b.cur / b.목표 * 100) : 0;
     let sheet = '';
@@ -526,7 +527,7 @@ const Mock = (() => {
     '민준': [['아이스크림홈런','매일'],['수학페이지','매일'],['이샘영어','매일'],['듀오링고','매일'],['키투러닝','매일'],['피아노','없음'],['토도영어워크북','매일'],['링글틴즈','매일'],['독서','책'],['학교숙제','없음'],['아빠과외','매일']],
     '민재': [['아이스크림홈런','매일'],['수학페이지','매일'],['째깍영어','매일'],['듀오링고','매일'],['피아노','없음'],['태권도','없음'],['토도영어워크북','매일'],['독서','책'],['학교숙제','없음'],['아빠과외','매일']]
   };
-  const db = {items: [], boards: [], recs: [], gifts: [], tgt: [], set: {'게임분':'30','할당량_민준':'5','할당량_민재':'4', ['큰선물_'+t.slice(0,4)]:'13'}};
+  const db = {items: [], boards: [], recs: [], gifts: [], tgt: [], set: {'게임분':'30','할당량_민준':'5','할당량_민재':'4', ['큰선물_'+t.slice(0,4)]:''}};
   KIDS.forEach(k => ITEMS[k].forEach(([n,s]) => { db.items.push({아이:k, 항목:n, 스티커:s}); if(s !== '없음') db.boards.push({아이:k, 항목:n, 목표: n==='독서'?26:100, 시작값:0, 완료:[]}); }));
   const B = (k,n) => db.boards.find(b => b.아이===k && b.항목===n);
   B('민준','아이스크림홈런').시작값 = 92; B('민준','수학페이지').시작값 = 57; B('민준','독서').시작값 = 11;
