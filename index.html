@@ -13,6 +13,10 @@
 <meta name="apple-mobile-web-app-title" content="민준민재">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="color-scheme" content="light">
+<!-- 데이터 서버에 미리 연결해 첫 호출을 앞당긴다 -->
+<link rel="preconnect" href="https://script.google.com" crossorigin>
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <!-- 글꼴은 화면을 그린 뒤에 입힌다. 기다리는 동안 기본 글꼴로 먼저 보인다. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
       media="print" onload="this.media='all';this.onload=null">
@@ -295,7 +299,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v15 · 2026-09-19</div></div>
+<div class="wrap"><div class="ver">v16 · 2026-09-20</div></div>
 
 
 
@@ -377,7 +381,7 @@ input[type=file]{width:100%;font-size:15px}
 const API_URL   = "https://script.google.com/macros/s/AKfycbzZ53Pd1ZWT9bgFgAej2fNLR_fJBYu9cBb2fKh2ME_WKe_Gd06k4cNguiao4QktLbA7-Q/exec";
 const ADMIN_PIN = "1103";
 // 스티커판 Apps Script 웹앱 주소. 비워두면 게임 배너는 조용히 뜨지 않는다.
-const STICKER_API = "";
+const STICKER_API = "https://script.google.com/macros/s/AKfycbwdslf16nk_KgmMwVzof2_7qjUx5jGP3o_qPJBWdwWzMRR-CPgbPT-64ZYpW2xKviq2/exec";
 
 let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holidays:[]};
 let view = "now";
@@ -947,7 +951,7 @@ function jsonp(params, base){
   return new Promise((ok, fail) => {
     const cb = "cb" + Date.now() + Math.floor(Math.random()*1000);
     const tag = document.createElement("script");
-    const timer = setTimeout(() => { done(); fail(new Error("timeout")); }, 30000);
+    const timer = setTimeout(() => { done(); fail(new Error("timeout")); }, 12000);
     function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
     window[cb] = d => { done(); ok(d); };
     tag.onerror = () => { done(); fail(new Error("network")); };
@@ -985,14 +989,21 @@ async function boot(){
     render();
     $("banner").textContent = "최신 일정을 확인하는 중입니다.";
   }
-  try{
-    await refresh();
+
+  // 한 번 실패했다고 포기하지 않는다. 특히 저장된 일정이 없는 첫 실행에서 중요하다.
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let ok = false;
+  for(const delay of [0, 2000, 5000]){
+    if(delay) await wait(delay);
+    try{ await refresh(); ok = true; break; }catch(e){ if(!c) render(); }
+  }
+
+  if(ok){
     const b = $("banner"); if(b) b.remove();
-  }catch(e){
+  }else{
     $("banner").textContent = c
       ? "연결이 안 돼 마지막으로 받은 일정을 보여주고 있습니다."
-      : "일정을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.";
-    if(!c) render();
+      : "일정을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.";
   }
   setInterval(() => {
     if(view==="now") { renderNow(); addGameBar(); }
