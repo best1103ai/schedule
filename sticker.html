@@ -152,6 +152,24 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,transparent,var(--k),transparent);background-size:50% 100%;animation:ld 1s linear infinite;z-index:9}
 @keyframes ld{from{background-position:-50% 0}to{background-position:150% 0}}
 @media (prefers-reduced-motion:reduce){body.busy::before{animation:none}#toast{transition:none}}
+
+/* ── 주간 정산 결과 화면 ── */
+.settle-ov{position:fixed;inset:0;background:rgba(20,26,46,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;transition:opacity .3s;padding:20px}
+.settle-ov.show{opacity:1}
+.sv-card{position:relative;background:var(--paper);border-radius:22px;padding:32px 26px;max-width:320px;width:100%;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.35);transform:scale(.8) translateY(10px);transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.settle-ov.show .sv-card{transform:scale(1) translateY(0)}
+.sv-emoji{font-size:60px;line-height:1;margin-bottom:6px}
+.settle-ov h2{font-family:var(--round);font-size:25px;margin:4px 0 8px}
+.settle-ov p{color:var(--mute);font-size:15px;line-height:1.5;margin:0 0 20px}
+.settle-ov .btn{width:100%}
+.settle-ov.good .sv-card{border:3px solid var(--gold)}
+.settle-ov.crash .sv-card{border:3px solid var(--warn);animation:sv-shake .4s}
+.settle-ov.bad .sv-card{border:3px solid var(--warn)}
+.settle-ov.neutral .sv-card{border:3px solid var(--line)}
+@keyframes sv-shake{0%,100%{transform:scale(1) translateX(0)}20%{transform:scale(1) translateX(-8px)}40%{transform:scale(1) translateX(8px)}60%{transform:scale(1) translateX(-5px)}80%{transform:scale(1) translateX(5px)}}
+.sv-star{position:fixed;top:-30px;color:var(--gold);font-size:22px;animation-name:sv-fall;animation-timing-function:linear;animation-iteration-count:1;z-index:998;pointer-events:none}
+@keyframes sv-fall{to{transform:translateY(115vh) rotate(360deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.settle-ov,.sv-card,.sv-star{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -204,11 +222,12 @@ function boardsOf(kid){
   }).sort((a,b) => order.indexOf(a.항목) - order.indexOf(b.항목));
 }
 function giftInfo(kid){
-  const earned = S.boards.filter(b => b.아이===kid).reduce((a,b) => a + b.완료.length, 0);
+  const avail = (S.pd && S.pd[kid]) ? S.pd[kid].선물 : 0;
   const used = S.gifts.filter(g => g.아이===kid).reduce((a,g) => a + Number(g.선물수||0), 0);
   const y = S.today.slice(0,4);
-  return {earned, used, avail: earned - used, need: +S.settings['큰선물_'+y] || 0, y};
+  return {earned: avail + used, used, avail, need: +S.settings['큰선물_'+y] || 0, y};
 }
+function partyInfo(kid){ return (S.pd && S.pd[kid]) ? S.pd[kid].책걸이 : 0; }
 const stickerTag = s => s==='매일' ? '스티커 1개' : s==='책' ? '공부 체크 · 스티커는 책 등록으로' : '공부로만 인정';
 
 /* ── 화면 ── */
@@ -263,6 +282,8 @@ function todayView(kid){
 }
 
 function boardView(kid){
+  const pk = S.pd ? S.pd[kid] : null;
+  if(pk && pk.붕괴) return `<section class="card"><h3>⚠️ 스티커판이 쉬고 있어요</h3><p class="empty">칭찬을 ${pk.회복칭찬}/10개 모으면 다시 시작해요. 아빠한테 잘한 일을 알려주세요!</p></section>`;
   const g = giftInfo(kid);
   const pct = g.need ? Math.min(100, Math.max(0, g.avail) / g.need * 100) : 0;
   const head = `<section class="gifts"><div><div class="n">${g.avail}</div><div class="l">받을 선물</div></div>
@@ -312,14 +333,32 @@ function dadView(){
   const recent = S.records.filter(r => r.상태!=='대기' && r.처리시각).sort((a,b) => b.처리시각.localeCompare(a.처리시각)).slice(0,8);
   const recentHtml = recent.length ? `<ul class="mini">${recent.map(r => `<li><span><span class="pill ${KC[r.아이]}">${r.아이}</span> ${what(r)} <span class="s">${md(r.날짜)}</span></span><span class="s">${r.상태} <button class="linkbtn" data-act="undo" data-id="${r.id}">되돌리기</button></span></li>`).join('')}</ul>` : '<p class="empty">아직 없어요.</p>';
 
-  const boardsHtml = KIDS.map(kid => `<h3 style="margin-top:10px">${kid}</h3>` + boardsOf(kid).map(b => {
+  const boardsHtml = KIDS.map(kid => {
+    if(S.pd && S.pd[kid] && S.pd[kid].붕괴) return `<h3 style="margin-top:10px">${kid}</h3><p class="empty">⚠️ 시스템이 붕괴돼서 판이 없어요. 칭찬 ${S.pd[kid].회복칭찬}/10 모이면 다시 생겨요.</p>`;
+    return `<h3 style="margin-top:10px">${kid}</h3>` + boardsOf(kid).map(b => {
     const key = kid+'|'+b.항목, ed = V.edit === key;
     const newBoard = Number(b.목표) === -1;
     const displayTarget = newBoard ? '📌 목표 설정 필요' : `${b.cur}/${b.목표}`;
     return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span>${esc(b.항목)}</span><span class="c">${displayTarget}</span><button class="btn ghost sm" data-act="edit" data-v="${esc(key)}">${ed?'닫기':'수정'}</button></div>` +
       (ed ? `<div class="editor"><label>목표 스티커 수</label><div class="form"><input type="number" id="et" value="${newBoard?100:b.목표}" min="1"><input type="text" id="er" placeholder="바꾸는 이유 (예: 민재 동기부여)"></div>
         <label>시작값 (앱 쓰기 전에 이미 붙인 스티커 수)</label><div class="form"><input type="number" id="es" value="${b.시작값}" min="0"><button class="btn" data-act="saveb" data-v="${esc(key)}">저장</button></div></div>` : '');
-  }).join('')).join('');
+  }).join('');
+  }).join('');
+
+  const pdHtml = KIDS.map(kid => {
+    const p = S.pd ? S.pd[kid] : null; if(!p) return '';
+    if(p.붕괴) return `<div class="brow" style="align-items:flex-start"><span class="pill ${KC[kid]}">${kid}</span><span style="flex:1"><b style="color:#C2410C">⚠️ 시스템 붕괴 상태</b><br><span class="s">칭찬 ${p.회복칭찬}/10 모이면 다시 시작해요 (정산 전 이번 주 칭찬 ${p.praise} · DP ${p.dp})</span></span></div>`;
+    return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span>이번 주(정산 전) 칭찬 ${p.praise} · DP ${p.dp} <span class="s">· 누적 DP ${p.누적DP}/10</span></span></div>`;
+  }).join('');
+  const pdForm = `<div class="form" style="margin-top:8px"><select id="pk">${KIDS.map(k=>`<option>${k}</option>`).join('')}</select><button class="btn" data-act="praise">+ 칭찬</button><button class="btn ghost" data-act="dp">+ DP</button></div>
+    <div class="form" style="margin-top:8px;justify-content:flex-end"><button class="btn ghost sm" data-act="settlenow">지금 정산하기</button></div>`;
+
+  const party1 = partyInfo('민준'), party2 = partyInfo('민재');
+  const partyLog = (S.party||[]).slice(-6).reverse();
+  const partyHtml = `<p class="empty" style="padding-top:0">남은 책걸이 · 민준 ${party1}개, 민재 ${party2}개</p>
+    <div class="form"><select id="bkk">${KIDS.map(k=>`<option>${k}</option>`).join('')}</select><button class="btn" data-act="bookdone">📖 공부책 끝냄 → 책걸이 +1</button></div>
+    <div class="form" style="margin-top:8px"><select id="pkk">${KIDS.map(k=>`<option>${k}</option>`).join('')}</select><input type="text" id="pc" placeholder="무엇을 먹었나요 (과자파티·라면 등)"><button class="btn" data-act="useparty">사용 기록</button></div>
+    ${partyLog.length ? `<ul class="mini">${partyLog.map(x => `<li><span><span class="pill ${KC[x.아이]}">${x.아이}</span> ${x.종류==='획득' ? '📖 책걸이 획득'+(x.내용?' · '+esc(x.내용):'') : '🍿 '+esc(x.내용)}</span><span class="s">${x.시각.slice(0,10)}</span></li>`).join('')}</ul>` : ''}`;
 
   const g1 = giftInfo('민준'), g2 = giftInfo('민재');
   const gifts = S.gifts.slice(-6).reverse();
@@ -340,8 +379,10 @@ function dadView(){
 
   return `<section class="card"><div class="wkhead" style="margin-bottom:4px"><h3>확인 기다리는 것 ${pend.length}</h3>${pend.length>1?'<button class="btn sm" data-act="apall">모두 승인</button>':''}</div>${pendHtml}</section>
     <section class="card"><h3>최근 처리</h3>${recentHtml}</section>
+    <section class="card"><h3>칭찬 · DP <span class="s">(일요일 18시 정산)</span></h3>${pdHtml}${pdForm}</section>
     <section class="card"><h3>스티커판 목표</h3>${boardsHtml}</section>
     <section class="card"><h3>선물 사용</h3>${giftHtml}</section>
+    <section class="card"><h3>책걸이</h3>${partyHtml}</section>
     <section class="card"><h3>목표 변경 기록</h3>${histHtml}</section>
     <section class="card"><h3>규칙 설정</h3>${setHtml}</section>
     <p class="hint"><button class="linkbtn" data-act="logout">아빠 화면 잠그기</button></p>`;
@@ -365,7 +406,49 @@ async function load(){
     if(!API_URL){ S = Mock.state(); }
     else { const j = await jsonp('t=' + Date.now()); if(j.error) throw new Error(j.error); S = j; }
     render();
+    checkSettleEvent();
   }catch(e){ if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}<br>새로고침해 주세요.</p></section>`; }
+}
+
+/* ── 주간 정산 애니메이션 (아이 화면에서, 새 정산 결과를 처음 볼 때 한 번) ── */
+function checkSettleEvent(){
+  if(!S || !S.pd) return;
+  const kid = KID_LOCK || (V.who !== '아빠' ? V.who : null);
+  if(!kid || !S.pd[kid]) return;
+  const evt = S.pd[kid].event;
+  if(!evt || !evt.id) return;
+  const seenKey = 'seenSettle_' + kid;
+  if(ls(seenKey) === evt.id) return;
+  ls(seenKey, evt.id);
+  showSettleOverlay(kid, evt);
+}
+function starsHtml(){
+  let s = '';
+  for(let i=0; i<18; i++){
+    const l = Math.random()*100, d = (Math.random()*1.2).toFixed(2), dur = (1.8+Math.random()*1.4).toFixed(2);
+    s += `<span class="sv-star" style="left:${l}%;animation-delay:${d}s;animation-duration:${dur}s">★</span>`;
+  }
+  return s;
+}
+function showSettleOverlay(kid, evt){
+  let cls, emoji, title, sub;
+  if(evt.result === 'award'){ cls='good'; emoji='⭐'; title = `칭찬 ${evt.praise}개 모았어요!`; sub = `${esc(evt.item||'')}에 스티커 ${evt.amount}개가 붙었어요`; }
+  else if(evt.result === 'recover'){ cls='good'; emoji='🎉'; title = '다시 시작해요!'; sub = '칭찬 10개를 모아서 스티커판이 새로 생겼어요'; }
+  else if(evt.result === 'even'){ cls='neutral'; emoji='📋'; title = '이번 주 정산'; sub = '칭찬과 DP가 같아서 이번 주는 그대로예요'; }
+  else if(evt.result === 'recovering'){ cls='neutral'; emoji='🌱'; title = '조금씩 회복 중'; sub = `칭찬을 모으고 있어요 (${evt.회복칭찬}/10)`; }
+  else if(evt.result === 'dp'){ cls='bad'; emoji='⚠️'; title = 'DP가 더 많았어요'; sub = `누적 DP ${evt.누적DP}/10 이에요. 다음 주엔 칭찬을 더 모아봐요!`; }
+  else if(evt.result === 'collapse'){ cls='crash'; emoji='💥'; title = '스티커판이 무너졌어요'; sub = '누적 DP 10개가 됐어요. 칭찬 10개를 모으면 다시 시작할 수 있어요.'; }
+  else return;
+
+  const div = document.createElement('div');
+  div.className = 'settle-ov ' + cls;
+  div.innerHTML = (cls==='good' ? starsHtml() : '') +
+    `<div class="sv-card"><div class="sv-emoji">${emoji}</div><h2>${esc(title)}</h2><p>${esc(sub)}</p><button class="btn">확인했어요</button></div>`;
+  document.body.appendChild(div);
+  requestAnimationFrame(() => div.classList.add('show'));
+  const close = () => { div.classList.remove('show'); setTimeout(() => div.remove(), 300); };
+  div.addEventListener('click', e => { if(e.target === div || e.target.tagName === 'BUTTON') close(); });
+  setTimeout(close, 9000);
 }
 async function call(action, data = {}){
   if(busy) return false; busy = true; document.body.classList.add('busy');
@@ -412,6 +495,17 @@ document.addEventListener('click', async e => {
     }
     case 'gift': {
       if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value})) toast('선물 사용을 기록했어요');
+      break;
+    }
+    case 'praise': { if(await call('praise', {kid: $('#pk').value})) toast('칭찬 +1'); break; }
+    case 'dp': { if(await call('dp', {kid: $('#pk').value})) toast('DP +1'); break; }
+    case 'settlenow': { if(await call('settleNow')) toast('정산했어요'); break; }
+    case 'bookdone': {
+      if(await call('bookdone', {kid: $('#bkk').value})) toast('책걸이 +1');
+      break;
+    }
+    case 'useparty': {
+      if(await call('useParty', {kid: $('#pkk').value, count: 1, content: $('#pc').value})) toast('책걸이 사용을 기록했어요');
       break;
     }
     case 'saveset': {
