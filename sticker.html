@@ -28,6 +28,7 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 /* 상단 */
 .top{display:flex;align-items:center;justify-content:space-between;padding:6px 0 12px}
 .top h1{font-size:24px;letter-spacing:-.01em}
+.ver{font-size:12px;font-weight:400;color:var(--mute);letter-spacing:0;vertical-align:middle}
 .top a{font-size:14px;color:var(--mute);text-decoration:none;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:var(--paper)}
 .who{display:grid;grid-template-columns:1fr 1fr .8fr;gap:8px;margin-bottom:14px}
 .who button{font-family:var(--round);font-size:18px;padding:12px 0;border-radius:14px;background:var(--paper);border:2px solid var(--line)}
@@ -174,7 +175,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판</h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v3</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -193,9 +194,15 @@ const KIDS = ['민준','민재'];
 const KC = {'민준':'mj','민재':'me'};
 /* 아이 전용 링크: sticker.html?kid=mj (민준) / ?kid=me (민재) → 그 아이 화면만 보임 */
 const KID_LOCK = ({mj:'민준', me:'민재'})[new URLSearchParams(location.search).get('kid')] || null;
+/* 칭찬 전용 링크: sticker.html?praise=1&pin=1103 → 승인·DP·설정 없이 "칭찬 주기"만 (엄마·할머니·할아버지용) */
+const PRAISE_MODE = new URLSearchParams(location.search).get('praise') === '1';
 const DOW = '일월화수목금토';
 let S = null, busy = false, PIN = ls('pin') || '';
 const V = {who: KID_LOCK || ls('who') || '민준', tab: 'today', date: null, open: null, edit: null, wk: null, bk: {}, pinOk: !!(ls('pin'))};
+if(PRAISE_MODE){
+  const up = new URLSearchParams(location.search).get('pin');
+  if(up){ PIN = up; V.pinOk = true; }
+}
 
 function ls(k, v){ try{ if(v === undefined) return localStorage.getItem('st_'+k); localStorage.setItem('st_'+k, v); }catch(e){ return null; } }
 const $ = s => document.querySelector(s);
@@ -233,12 +240,23 @@ const stickerTag = s => s==='매일' ? '스티커 1개' : s==='책' ? '공부 �
 /* ── 화면 ── */
 function render(){
   document.querySelectorAll('.who button').forEach(b => b.classList.toggle('on', b.dataset.v === V.who));
-  if(KID_LOCK){ $('.who').style.display = 'none'; $('.top h1').textContent = KID_LOCK + ' 스티커판'; }
+  if(KID_LOCK){ $('.who').style.display = 'none'; $('.top h1').childNodes[0].textContent = KID_LOCK + ' 스티커판 '; }
+  if(PRAISE_MODE){ $('.who').style.display = 'none'; $('.top h1').childNodes[0].textContent = '칭찬 주기 '; }
   document.body.dataset.kid = KC[V.who] || 'dad';
   $('#sched').href = SCHEDULE_URL;
   if(!S) return;
   const demo = API_URL ? '' : '<div class="demo">미리보기 모드예요. 새로고침하면 처음으로 돌아가요.</div>';
-  $('#app').innerHTML = demo + (V.who === '아빠' ? dadView() : kidView(V.who));
+  $('#app').innerHTML = demo + (PRAISE_MODE ? praiseView() : (V.who === '아빠' ? dadView() : kidView(V.who)));
+}
+
+function praiseView(){
+  if(!V.pinOk) return `<section class="card"><h3>확인</h3><div class="form"><input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" data-act="plogin">들어가기</button></div></section>`;
+  const rows = KIDS.map(kid => {
+    const p = S.pd ? S.pd[kid] : null;
+    const info = p ? `이번 주 칭찬 ${p.praise}개 모았어요` : '';
+    return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span class="s" style="flex:1">${esc(info)}</span><button class="btn" data-act="praise2" data-v="${kid}">👏 칭찬 주기</button></div>`;
+  }).join('');
+  return `<section class="card"><h3>오늘 잘한 일이 있었나요?</h3>${rows}</section>`;
 }
 
 function kidView(kid){
@@ -482,6 +500,8 @@ document.addEventListener('click', async e => {
     }
     case 'cancel': await call('cancel', {id}); break;
     case 'login': PIN = $('#pin').value.trim(); if(await call('login')){ V.pinOk = true; ls('pin', PIN); render(); } break;
+    case 'plogin': PIN = $('#pin').value.trim(); V.pinOk = true; render(); break;
+    case 'praise2': { if(await call('praise', {kid: v})) toast(v + ' 칭찬 +1 👏'); break; }
     case 'logout': PIN = ''; ls('pin',''); V.pinOk = false; render(); break;
     case 'bk': V.bk[id] = +v; render(); break;
     case 'ap': await call('approve', {ids: [id], stickers: V.bk}); break;
@@ -516,7 +536,7 @@ document.addEventListener('click', async e => {
     }
   }
 });
-document.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target.id === 'pin') $('[data-act=login]').click(); if(e.key === 'Enter' && e.target.id === 'bt') $('[data-act=book]').click(); });
+document.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target.id === 'pin') ($('[data-act=plogin]') || $('[data-act=login]')).click(); if(e.key === 'Enter' && e.target.id === 'bt') $('[data-act=book]').click(); });
 document.addEventListener('visibilitychange', () => { if(!document.hidden && !busy) load(); });
 setInterval(() => { if(!document.hidden && !busy && API_URL) load(); }, 60000);
 
