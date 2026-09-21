@@ -175,7 +175,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v4</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v5</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -278,24 +278,27 @@ function todayView(kid){
   const strip = `<div class="days">${days.map(x => { const g = dayStatus(kid,x).game;
     return `<button class="day ${x===d?'on':''}" data-act="date" data-v="${x}" aria-label="${md(x)}"><small>${x===S.today?'오늘':dow(x)}</small><b>${+x.slice(8)}</b><i>${g?'🎮':''}</i></button>`; }).join('')}</div>`;
 
-  const st = dayStatus(kid, d), mins = +S.settings['게임분'] || 30;
-  let slots = ''; for(let i=0; i<st.q; i++) slots += `<span class="slot ${i<st.ok?'ok':i<st.ok+st.wait?'wait':''}"></span>`;
-  slots += `<span class="slot hw ${st.hw==='승인'?'ok':st.hw==='대기'?'wait':''}">${st.hw==='승인'?'':'숙'}</span>`;
-  const need = Math.max(0, st.q - st.ok - st.wait);
+  /* 게임 가능 여부는 지금 어떤 날짜를 보고 있든 항상 '오늘' 기준으로 고정 */
+  const tSt = dayStatus(kid, S.today), mins = +S.settings['게임분'] || 30;
+  let tSlots = ''; for(let i=0; i<tSt.q; i++) tSlots += `<span class="slot ${i<tSt.ok?'ok':i<tSt.ok+tSt.wait?'wait':''}"></span>`;
+  tSlots += `<span class="slot hw ${tSt.hw==='승인'?'ok':tSt.hw==='대기'?'wait':''}">${tSt.hw==='승인'?'':'숙'}</span>`;
+  const tNeed = Math.max(0, tSt.q - tSt.ok - tSt.wait);
   let title, msg;
-  if(st.game){ title = `게임 ${mins}분 해도 돼요!`; msg = `공부 ${st.ok}개 · 내일 숙제까지 아빠가 확인했어요.`; }
-  else if(need === 0 && st.hw && st.hw !== '반려'){ title = '아빠 확인을 기다려요'; msg = '다 체크했어요. 확인되면 게임 시간이 생겨요.'; }
+  if(tSt.game){ title = `게임 ${mins}분 해도 돼요!`; msg = `오늘 공부 ${tSt.ok}개 · 내일 숙제까지 아빠가 확인했어요.`; }
+  else if(tNeed === 0 && tSt.hw && tSt.hw !== '반려'){ title = '아빠 확인을 기다려요'; msg = '오늘 다 체크했어요. 확인되면 게임 시간이 생겨요.'; }
   else {
-    title = need > 0 ? `${need}개 더 하면 게임 ${mins}분` : `내일 숙제만 남았어요`;
-    msg = (st.hw && st.hw !== '반려') ? '내일 숙제는 체크했어요.' : '게임하려면 내일 학교·학원 숙제도 끝내야 해요.';
+    title = tNeed > 0 ? `${tNeed}개 더 하면 게임 ${mins}분` : `내일 숙제만 남았어요`;
+    msg = (tSt.hw && tSt.hw !== '반려') ? '내일 숙제는 체크했어요.' : '게임하려면 오늘 학교·학원 숙제도 끝내야 해요.';
   }
-  const when = d === S.today ? '오늘' : `${md(d)} ${dow(d)}요일`;
-  const hero = `<section class="game"><div class="when">${when} · 약속 ${st.q}개</div><h2>${title}</h2><div class="slots">${slots}</div><p>${msg}</p></section>`;
+  const hero = `<section class="game"><div class="when">오늘 기준 · 약속 ${tSt.q}개</div><h2>${title}</h2><div class="slots">${tSlots}</div><p>${msg}</p></section>`;
+
+  /* 체크리스트는 선택한 날짜(d) 기준 — 지난 날짜는 스티커만 채워지고 오늘 게임 여부와는 무관 */
+  const backfillNote = d !== S.today ? `<p class="empty" style="padding:8px 0 0">📌 지금 체크하는 건 <b>${md(d)} ${dow(d)}요일</b> 분이에요 — 스티커에는 들어가지만, 오늘 게임 여부와는 상관없어요.</p>` : '';
 
   const lbl = {'':'','대기':'확인 중','승인':'완료','반려':'다시 해보자'};
   const rows = S.items[kid].map(i => { const s = (recOf(kid,d,i.항목,'daily')||{}).상태 || '';
     return `<button class="row s-${s||'none'}" data-act="chk" data-kind="daily" data-item="${esc(i.항목)}"><span class="mark"></span><span><span class="nm">${esc(i.항목)}</span><span class="tag">${stickerTag(i.스티커)}</span></span><span class="st">${lbl[s]}</span></button>`; }).join('');
-  const hs = st.hw;
+  const hs = (recOf(kid,d,'내일숙제','hw')||{}).상태 || '';
   const hwRow = `<button class="row hwrow s-${hs||'none'}" data-act="chk" data-kind="hw" data-item="내일숙제"><span class="mark"></span><span><span class="nm">내일 숙제 다 했어요</span><span class="tag">학교·학원 숙제 · 게임 조건</span></span><span class="st">${lbl[hs]}</span></button>`;
 
   const books = S.records.filter(r => r.아이===kid && r.종류==='book').sort((a,b) => b.날짜.localeCompare(a.날짜)).slice(0,5);
@@ -303,7 +306,7 @@ function todayView(kid){
     <div class="form"><input type="text" id="bt" placeholder="책 제목" autocomplete="off"><label class="chk"><input type="checkbox" id="bthick">두꺼운 책</label><button class="btn" data-act="book">등록</button></div>
     ${books.length ? `<ul class="mini">${books.map(b => `<li><span>${esc(b.메모)} <span class="s">${md(b.날짜)}</span></span><span class="s">${b.상태==='승인' ? '스티커 '+b.스티커+'개' : b.상태==='반려' ? '반려' : `확인 중 <button class="linkbtn" data-act="cancel" data-id="${b.id}">취소</button>`}</span></li>`).join('')}</ul>` : ''}
   </section>`;
-  return strip + hero + `<div class="list">${rows}${hwRow}</div><p class="hint">한 번 누르면 아빠에게 확인 요청, 한 번 더 누르면 취소돼요. 지난 7일까지 체크할 수 있어요.</p>` + bookCard;
+  return strip + hero + backfillNote + `<div class="list">${rows}${hwRow}</div><p class="hint">한 번 누르면 아빠에게 확인 요청, 한 번 더 누르면 취소돼요. 지난 7일까지 체크할 수 있어요.</p>` + bookCard;
 }
 
 function boardView(kid){
