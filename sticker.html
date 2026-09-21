@@ -175,7 +175,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v3</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v4</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -251,12 +251,19 @@ function render(){
 
 function praiseView(){
   if(!V.pinOk) return `<section class="card"><h3>확인</h3><div class="form"><input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" data-act="plogin">들어가기</button></div></section>`;
-  const rows = KIDS.map(kid => {
+  return KIDS.map(kid => {
     const p = S.pd ? S.pd[kid] : null;
-    const info = p ? `이번 주 칭찬 ${p.praise}개 모았어요` : '';
-    return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span class="s" style="flex:1">${esc(info)}</span><button class="btn" data-act="praise2" data-v="${kid}">👏 칭찬 주기</button></div>`;
+    const collapsed = p && p.붕괴;
+    const st = dayStatus(kid, S.today);
+    const g = giftInfo(kid);
+    const header = `<h3><span class="pill ${KC[kid]}">${kid}</span>${p ? ` <span class="s">이번 주 칭찬 ${p.praise}개</span>` : ''}</h3>`;
+    const todayLine = `<p class="empty" style="padding:0 0 6px">오늘 ${st.ok}/${st.q}개 체크 · 숙제 ${st.hw==='승인' ? '확인됨' : st.hw==='대기' ? '확인 대기' : '아직'}${collapsed ? '' : ` · 안 쓴 선물 ${g.avail}개`}</p>`;
+    const boardsHtml = collapsed
+      ? `<p class="empty" style="padding-top:0">스티커판이 쉬고 있어요 (칭찬 ${p.회복칭찬}/10 모이면 다시 시작해요)</p>`
+      : boardsOf(kid).map(b => `<div class="brow"><span>${esc(b.항목)}</span><span class="c">${Number(b.목표)>0 ? `${b.cur}/${b.목표}` : '목표 정하는 중'}</span></div>`).join('');
+    return `<section class="card">${header}${todayLine}${boardsHtml}
+      <button class="btn" style="width:100%;margin-top:12px" data-act="praise2" data-v="${kid}">👏 칭찬 주기</button></section>`;
   }).join('');
-  return `<section class="card"><h3>오늘 잘한 일이 있었나요?</h3>${rows}</section>`;
 }
 
 function kidView(kid){
