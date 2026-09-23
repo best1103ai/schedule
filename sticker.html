@@ -84,6 +84,8 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 .card{background:var(--paper);border-radius:18px;border:1px solid var(--line);padding:14px;margin-bottom:14px}
 .card h3{font-size:18px;margin-bottom:8px}
 .form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.qp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qp .btn{width:100%}
 .form input[type=text],.form input[type=number],.form input[type=password],.form select{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:16px}
 .form input[type=number]{max-width:90px;flex:0 0 90px}
 .chk{display:flex;gap:6px;align-items:center;font-size:14px;color:var(--mute)}
@@ -175,7 +177,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v5</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v7</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -303,7 +305,7 @@ function todayView(kid){
 
   const books = S.records.filter(r => r.아이===kid && r.종류==='book').sort((a,b) => b.날짜.localeCompare(a.날짜)).slice(0,5);
   const bookCard = `<section class="card"><h3>📚 다 읽은 책 등록</h3>
-    <div class="form"><input type="text" id="bt" placeholder="책 제목" autocomplete="off"><label class="chk"><input type="checkbox" id="bthick">두꺼운 책</label><button class="btn" data-act="book">등록</button></div>
+    <div class="form"><input type="text" id="bt" placeholder="책 제목" autocomplete="off"><select id="bstk"><option value="1">보통 책 (1개)</option><option value="2">두꺼운 책 (2개)</option><option value="3">아주 두꺼운 책 (3개)</option></select><button class="btn" data-act="book">등록</button></div>
     ${books.length ? `<ul class="mini">${books.map(b => `<li><span>${esc(b.메모)} <span class="s">${md(b.날짜)}</span></span><span class="s">${b.상태==='승인' ? '스티커 '+b.스티커+'개' : b.상태==='반려' ? '반려' : `확인 중 <button class="linkbtn" data-act="cancel" data-id="${b.id}">취소</button>`}</span></li>`).join('')}</ul>` : ''}
   </section>`;
   return strip + hero + backfillNote + `<div class="list">${rows}${hwRow}</div><p class="hint">한 번 누르면 아빠에게 확인 요청, 한 번 더 누르면 취소돼요. 지난 7일까지 체크할 수 있어요.</p>` + bookCard;
@@ -352,10 +354,10 @@ function weekView(kid){
 function dadView(){
   if(!V.pinOk) return `<section class="card"><h3>아빠 확인</h3><div class="form"><input type="password" id="pin" inputmode="numeric" placeholder="PIN"><button class="btn" data-act="login">들어가기</button></div></section>`;
   const pend = S.records.filter(r => r.상태==='대기').sort((a,b) => a.날짜.localeCompare(b.날짜) || a.아이.localeCompare(b.아이));
-  const what = r => r.종류==='hw' ? '내일 숙제 다 했어요' : r.종류==='book' ? '📚 '+esc(r.메모) : esc(r.항목);
+  const what = r => r.종류==='hw' ? '내일 숙제 다 했어요' : r.종류==='book' ? '📚 '+esc(r.메모)+' 다 읽음' : r.항목==='독서' ? '오늘 책 읽었어요 표시 (스티커 없음)' : esc(r.항목);
   const pendHtml = pend.length ? pend.map(r => {
     const n = V.bk[r.id] || +r.스티커;
-    const step = r.종류==='book' ? `<div class="step">${[1,2].map(k => `<button class="${n===k?'on':''}" data-act="bk" data-id="${r.id}" data-v="${k}">${k}</button>`).join('')}</div>` : '';
+    const step = r.종류==='book' ? `<div class="step">${[1,2,3].map(k => `<button class="${n===k?'on':''}" data-act="bk" data-id="${r.id}" data-v="${k}">${k}</button>`).join('')}</div>` : '';
     return `<div class="pend"><span class="pill ${KC[r.아이]}">${r.아이}</span><span class="what">${what(r)}<small>${md(r.날짜)} ${dow(r.날짜)}${r.날짜!==S.today?' · 지난 날짜':''}</small></span><span class="acts">${step}<button class="no" data-act="rj" data-id="${r.id}">반려</button><button class="ok" data-act="ap" data-id="${r.id}">승인</button></span></div>`;
   }).join('') : '<p class="empty">확인할 게 없어요.</p>';
 
@@ -379,7 +381,12 @@ function dadView(){
     if(p.붕괴) return `<div class="brow" style="align-items:flex-start"><span class="pill ${KC[kid]}">${kid}</span><span style="flex:1"><b style="color:#C2410C">⚠️ 시스템 붕괴 상태</b><br><span class="s">칭찬 ${p.회복칭찬}/10 모이면 다시 시작해요 (정산 전 이번 주 칭찬 ${p.praise} · DP ${p.dp})</span></span></div>`;
     return `<div class="brow"><span class="pill ${KC[kid]}">${kid}</span><span>이번 주(정산 전) 칭찬 ${p.praise} · DP ${p.dp} <span class="s">· 누적 DP ${p.누적DP}/10</span></span></div>`;
   }).join('');
-  const pdForm = `<div class="form" style="margin-top:8px"><select id="pk">${KIDS.map(k=>`<option>${k}</option>`).join('')}</select><button class="btn" data-act="praise">+ 칭찬</button><button class="btn ghost" data-act="dp">+ DP</button></div>
+  const pdForm = `<div class="qp">
+      <button class="btn sm" data-act="praise" data-v="민준">민준 👏 칭찬</button>
+      <button class="btn ghost sm" data-act="dp" data-v="민준">민준 ⚠️ DP</button>
+      <button class="btn sm" data-act="praise" data-v="민재">민재 👏 칭찬</button>
+      <button class="btn ghost sm" data-act="dp" data-v="민재">민재 ⚠️ DP</button>
+    </div>
     <div class="form" style="margin-top:8px;justify-content:flex-end"><button class="btn ghost sm" data-act="settlenow">지금 정산하기</button></div>`;
 
   const party1 = partyInfo('민준'), party2 = partyInfo('민재');
@@ -407,8 +414,8 @@ function dadView(){
   const histHtml = hist.length ? `<ul class="mini">${hist.map(h => `<li><span><span class="pill ${KC[h.아이]}">${h.아이}</span> ${esc(h.항목)} ${h.이전}→${h.새목표}${h.이유?` <span class="s">${esc(h.이유)}</span>`:''}</span><span class="s">${md(h.시각.slice(0,10))}</span></li>`).join('')}</ul>` : '<p class="empty">목표를 바꾼 기록이 없어요.</p>';
 
   return `<section class="card"><div class="wkhead" style="margin-bottom:4px"><h3>확인 기다리는 것 ${pend.length}</h3>${pend.length>1?'<button class="btn sm" data-act="apall">모두 승인</button>':''}</div>${pendHtml}</section>
-    <section class="card"><h3>최근 처리</h3>${recentHtml}</section>
     <section class="card"><h3>칭찬 · DP <span class="s">(일요일 18시 정산)</span></h3>${pdHtml}${pdForm}</section>
+    <section class="card"><h3>최근 처리</h3>${recentHtml}</section>
     <section class="card"><h3>스티커판 목표</h3>${boardsHtml}</section>
     <section class="card"><h3>선물 사용</h3>${giftHtml}</section>
     <section class="card"><h3>책걸이</h3>${partyHtml}</section>
@@ -505,7 +512,7 @@ document.addEventListener('click', async e => {
     case 'chk': await call('check', {kid: V.who, date: V.date || S.today, item: b.dataset.item, kind: b.dataset.kind}); break;
     case 'book': {
       const t = $('#bt').value.trim(); if(!t){ toast('책 제목을 적어주세요'); return; }
-      if(await call('check', {kid: V.who, date: V.date || S.today, kind: 'book', memo: t, stickers: $('#bthick').checked ? 2 : 1})) toast('아빠에게 확인 요청했어요');
+      if(await call('check', {kid: V.who, date: V.date || S.today, kind: 'book', memo: t, stickers: $('#bstk').value})) toast('아빠에게 확인 요청했어요');
       break;
     }
     case 'cancel': await call('cancel', {id}); break;
@@ -528,8 +535,8 @@ document.addEventListener('click', async e => {
       if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value})) toast('선물 사용을 기록했어요');
       break;
     }
-    case 'praise': { if(await call('praise', {kid: $('#pk').value})) toast('칭찬 +1'); break; }
-    case 'dp': { if(await call('dp', {kid: $('#pk').value})) toast('DP +1'); break; }
+    case 'praise': { if(await call('praise', {kid: v})) toast(v + ' 칭찬 +1 👏'); break; }
+    case 'dp': { if(await call('dp', {kid: v})) toast(v + ' DP +1'); break; }
     case 'settlenow': { if(await call('settleNow')) toast('정산했어요'); break; }
     case 'bookdone': {
       if(await call('bookdone', {kid: $('#bkk').value})) toast('책걸이 +1');
