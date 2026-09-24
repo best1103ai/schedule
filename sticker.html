@@ -177,7 +177,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v7</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v9</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -199,7 +199,7 @@ const KID_LOCK = ({mj:'민준', me:'민재'})[new URLSearchParams(location.searc
 /* 칭찬 전용 링크: sticker.html?praise=1&pin=1103 → 승인·DP·설정 없이 "칭찬 주기"만 (엄마·할머니·할아버지용) */
 const PRAISE_MODE = new URLSearchParams(location.search).get('praise') === '1';
 const DOW = '일월화수목금토';
-let S = null, busy = false, PIN = ls('pin') || '';
+let S = null, busy = false, PIN = ls('pin') || '', lastRet = null;
 const V = {who: KID_LOCK || ls('who') || '민준', tab: 'today', date: null, open: null, edit: null, wk: null, bk: {}, pinOk: !!(ls('pin'))};
 if(PRAISE_MODE){
   const up = new URLSearchParams(location.search).get('pin');
@@ -214,6 +214,11 @@ const dow = s => DOW[new Date(s+'T00:00:00Z').getUTCDay()];
 const md = s => (+s.slice(5,7))+'/'+(+s.slice(8,10));
 const monday = s => addDays(s, -((new Date(s+'T00:00:00Z').getUTCDay()+6)%7));
 function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2400); }
+function toastUndo(m, id){
+  const t = $('#toast');
+  t.innerHTML = esc(m) + (id ? ` <button class="linkbtn" style="color:#fff;text-decoration:underline;margin-left:6px" data-act="undopd" data-v="${id}">되돌리기</button>` : '');
+  t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 5000);
+}
 
 /* ── 계산 ── */
 const recOf = (kid, d, item, kind) => S.records.find(r => r.아이===kid && r.날짜===d && r.항목===item && r.종류===kind);
@@ -492,7 +497,7 @@ async function call(action, data = {}){
     const q = {action, pin: PIN, ...data};
     const res = !API_URL ? Mock.run(q) : await jsonp('payload=' + encodeURIComponent(JSON.stringify(q)));
     if(!res.ok) throw new Error(res.error || '저장하지 못했어요');
-    S = res.state; render(); return true;
+    S = res.state; lastRet = res.ret; render(); return true;
   }catch(e){
     toast(e.message);
     if(/PIN/.test(e.message)){ PIN = ''; ls('pin',''); V.pinOk = false; render(); }
@@ -518,7 +523,8 @@ document.addEventListener('click', async e => {
     case 'cancel': await call('cancel', {id}); break;
     case 'login': PIN = $('#pin').value.trim(); if(await call('login')){ V.pinOk = true; ls('pin', PIN); render(); } break;
     case 'plogin': PIN = $('#pin').value.trim(); V.pinOk = true; render(); break;
-    case 'praise2': { if(await call('praise', {kid: v})) toast(v + ' 칭찬 +1 👏'); break; }
+    case 'praise2': { if(await call('praise', {kid: v})) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'undopd': { if(await call('cancelPd', {id: v})) toast('되돌렸어요'); break; }
     case 'logout': PIN = ''; ls('pin',''); V.pinOk = false; render(); break;
     case 'bk': V.bk[id] = +v; render(); break;
     case 'ap': await call('approve', {ids: [id], stickers: V.bk}); break;
@@ -535,8 +541,8 @@ document.addEventListener('click', async e => {
       if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value})) toast('선물 사용을 기록했어요');
       break;
     }
-    case 'praise': { if(await call('praise', {kid: v})) toast(v + ' 칭찬 +1 👏'); break; }
-    case 'dp': { if(await call('dp', {kid: v})) toast(v + ' DP +1'); break; }
+    case 'praise': { if(await call('praise', {kid: v})) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'dp': { if(await call('dp', {kid: v})) toastUndo(v + ' DP +1', lastRet); break; }
     case 'settlenow': { if(await call('settleNow')) toast('정산했어요'); break; }
     case 'bookdone': {
       if(await call('bookdone', {kid: $('#bkk').value})) toast('책걸이 +1');
