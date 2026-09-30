@@ -118,6 +118,10 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .mcell.out{background:var(--fill);color:var(--faint)}
 .mcell .n{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
 .mcell.sun .n{color:#b91c1c}
+.mcell.sat .n{color:#1e40af}
+.mhead.sun{color:#b91c1c}
+.mhead.sat{color:#1e40af}
+.dhead.sat{color:#1e40af}
 .mcell.out .n{color:var(--faint)}
 .mcell.sel{outline:2.5px solid var(--ink);outline-offset:-2px}
 .mcell.now .n{background:var(--ink);color:var(--paper);border-radius:6px;padding:1px 5px}
@@ -147,6 +151,7 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .notice .ns{font-size:15px;color:var(--soft);margin-top:2px}
 .nfull{white-space:pre-wrap;font-size:16px;line-height:1.65;margin:0 0 18px}
 .nlink{display:inline-block;font-weight:800;border-bottom:2px solid var(--ink);padding-bottom:1px}
+.nlinks{display:flex;gap:16px;flex-wrap:wrap}
 
 /* ─── 하단바 ─── */
 .footer{display:flex;gap:8px;margin:28px auto 10px}
@@ -301,7 +306,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v17 · 2026-09-20</div></div>
+<div class="wrap"><div class="ver">v19 · 2026-09-28</div></div>
 
 
 
@@ -356,8 +361,9 @@ input[type=file]{width:100%;font-size:15px}
   <p class="sub">e알리미 캡처를 고르면 내용을 읽어 보관합니다. 날짜가 있는 일정은 아빠의 승인을 거쳐 스케줄에 반영됩니다.</p>
   <label for="uKid">누구 알림장</label>
   <select id="uKid"><option value="자동">자동 판별 (권장)</option><option value="민준">민준</option><option value="민재">민재</option><option value="공통">공통</option></select>
-  <label for="uFile">캡처 고르기</label>
-  <input type="file" id="uFile" accept="image/*">
+  <label for="uFile">캡처 고르기 <span style="font-weight:500;color:var(--soft)">(한 알림장이 여러 장이면 한꺼번에 고르세요)</span></label>
+  <input type="file" id="uFile" accept="image/*" multiple>
+  <p class="sub" id="uCount" style="margin:8px 0 0"></p>
   <button class="btn main" id="uSend" style="margin-top:20px;width:100%">올리기</button>
 </div></div>
 
@@ -372,7 +378,7 @@ input[type=file]{width:100%;font-size:15px}
   <h2 id="nTitle"></h2>
   <p class="sub" id="nMeta"></p>
   <p class="nfull" id="nText"></p>
-  <a class="nlink" id="nImg" target="_blank" rel="noopener">원본 캡처 열기</a>
+  <div class="nlinks" id="nImgs"></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -627,7 +633,7 @@ function daySection(d, showTag){
   const tag = showTag && isToday(d) ? '<span class="tag">오늘</span>' : "";
   const htag = hol ? `<span class="htag">${hol}</span>` : "";
   return `<section class="dsec">
-    <div class="dhead ${isRed(d)?"sun":""}">${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})${tag}${htag}</div>
+    <div class="dhead ${isRed(d)?"sun":d.getDay()===6?"sat":""}">${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})${tag}${htag}</div>
     <div class="cols">${cols}</div></section>`;
 }
 
@@ -649,15 +655,17 @@ function renderWeek(){
 function renderMonth(){
   const first = mStart(anchor);
   $("period").textContent = `${first.getFullYear()}년 ${first.getMonth()+1}월`;
-  const start = wStart(first);
-  let h = '<div class="mgrid">' + ["월","화","수","목","금","토","일"].map(d=>`<div class="mhead">${d}</div>`).join("");
+  const start = add(first, -first.getDay());          // 일요일부터 시작하는 일반 달력 순서
+  const HEAD = ["일","월","화","수","목","금","토"];
+  let h = '<div class="mgrid">' + HEAD.map((d,i)=>`<div class="mhead ${i===0?"sun":i===6?"sat":""}">${d}</div>`).join("");
   for(let i=0;i<42;i++){
     const d = add(start,i);
     if(i>=35 && d.getMonth()!==first.getMonth()) break;
     const out = d.getMonth()!==first.getMonth();
     const sp = out ? [] : specialsOn(d);
     const dots = [...new Set(sp.map(x=>x.kid))].map(k=>`<span class="mdot ${k==="mje"?"mje":""}"></span>`).join("");
-    h += `<button class="mcell ${out?"out":""} ${!out&&isRed(d)?"sun":""} ${isToday(d)?"now":""} ${sel===fmt(d)?"sel":""}" data-d="${fmt(d)}" title="${out?"":holidayOn(d)}">
+    const dayCls = out ? "" : isRed(d) ? "sun" : d.getDay()===6 ? "sat" : "";
+    h += `<button class="mcell ${out?"out":""} ${dayCls} ${isToday(d)?"now":""} ${sel===fmt(d)?"sel":""}" data-d="${fmt(d)}" title="${out?"":holidayOn(d)}">
       <div class="n">${d.getDate()}</div><div class="mdots">${dots}</div></button>`;
   }
   h += "</div>";
@@ -745,6 +753,8 @@ function renderNotices(){
   q.oninput = () => { noticeQ = q.value; paintNotices(); };
   paintNotices();
 }
+const photoCount = n => String(n.url||"").split(/\s+/).filter(Boolean).length;
+
 function paintNotices(){
   const key = noticeQ.trim();
   const list = (DATA.notices||[])
@@ -753,7 +763,7 @@ function paintNotices(){
   $("nlist").innerHTML = list.length ? list.map(n => `
     <button class="notice" data-n="${n.id}">
       <div class="nh"><span class="nkid ${n.kid}">${n.kid==="both"?"공통":KIDS[n.kid]}</span>
-        <span class="nd">${String(n.ts).slice(0,10)}</span></div>
+        <span class="nd">${String(n.ts).slice(0,10)}${photoCount(n)>1 ? ` · ${photoCount(n)}장` : ""}</span></div>
       <div class="nt">${n.title||"제목 없음"}</div>
       ${n.summary?`<div class="ns">${n.summary}</div>`:""}
     </button>`).join("")
@@ -765,8 +775,9 @@ function openNotice(id){
   $("nTitle").textContent = n.title || "알림장";
   $("nMeta").textContent = `${n.kid==="both"?"공통":KIDS[n.kid]} · ${String(n.ts).slice(0,10)}`;
   $("nText").textContent = n.text || n.summary || "";
-  const a = $("nImg");
-  if(n.url){ a.href = n.url; a.style.display = "inline-block"; } else a.style.display = "none";
+  const urls = String(n.url||"").split(/\s+/).filter(Boolean);
+  $("nImgs").innerHTML = urls.map((u,i) =>
+    `<a class="nlink" href="${u}" target="_blank" rel="noopener">${urls.length>1 ? `캡처 ${i+1}` : "원본 캡처 열기"}</a>`).join("");
   show("sheetNotice");
 }
 
@@ -887,30 +898,63 @@ async function decide(id, status){
 }
 
 /* ─── 알림장 업로드 ─── */
+const MAX_PHOTOS = 6;
+
+// 너무 큰 사진만 줄여서 보낸다. 글씨 읽기에 필요한 크기는 남긴다.
+function shrink(file, max = 2000, q = 0.85){
+  return new Promise(resolve => {
+    const raw = () => {
+      const r = new FileReader();
+      r.onload = () => resolve({mime: file.type || "image/jpeg", data: r.result.split(",")[1]});
+      r.readAsDataURL(file);
+    };
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try{
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        const out = c.toDataURL("image/jpeg", q);
+        URL.revokeObjectURL(url);
+        resolve({mime: "image/jpeg", data: out.split(",")[1]});
+      }catch(e){ URL.revokeObjectURL(url); raw(); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); raw(); };   // 브라우저가 못 여는 형식은 원본 그대로
+    img.src = url;
+  });
+}
+
+$("uFile").onchange = () => {
+  const n = $("uFile").files.length;
+  $("uCount").textContent = !n ? "" :
+    n > MAX_PHOTOS ? `${n}장을 골랐습니다. 앞의 ${MAX_PHOTOS}장만 올라갑니다.`
+                   : `${n}장을 골랐습니다. 한 알림장으로 묶어서 읽습니다.`;
+};
+
 let uploading = false;
 $("uSend").onclick = async () => {
   if(uploading) return;                       // 두 번 눌러 중복 등록되는 것을 막는다
-  const f = $("uFile").files[0];
-  if(!f){ toast("캡처를 먼저 고르세요"); return; }
+  const files = [...$("uFile").files].slice(0, MAX_PHOTOS);
+  if(!files.length){ toast("캡처를 먼저 고르세요"); return; }
 
   const kid = $("uKid").value;
-  const data = await new Promise((ok,no) => {
-    const r = new FileReader();
-    r.onload = () => ok(r.result.split(",")[1]);
-    r.onerror = no; r.readAsDataURL(f);
-  });
-
-  // 읽는 데 10초쯤 걸린다. 화면을 붙잡아두지 않고 먼저 닫는다.
   uploading = true;
   $("uSend").disabled = true;
-  $("uFile").value = "";
+  toast("사진을 준비하는 중입니다");
+  const images = [];
+  for(const f of files) images.push(await shrink(f));
+
+  // 읽는 데 10초쯤 걸린다. 화면을 붙잡아두지 않고 먼저 닫는다.
+  $("uFile").value = ""; $("uCount").textContent = "";
   hide();
-  toast("올리는 중입니다. 10초쯤 걸립니다");
+  toast(files.length > 1 ? `${files.length}장을 올리는 중입니다. 20초쯤 걸립니다` : "올리는 중입니다. 10초쯤 걸립니다");
 
   try{
     const before = (DATA.notices||[]).length;
     await fetch(API_URL, {method:"POST", mode:"no-cors", body:JSON.stringify({
-      action:"uploadNotice", kid, mime:f.type, data })});
+      action:"uploadNotice", kid, images })});
     await refresh();
     if(adminPin) renderRequests();
     toast((DATA.notices||[]).length > before ? "알림장을 보관했습니다" : "올렸습니다. 잠시 후 목록에 나타납니다");
