@@ -46,10 +46,14 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pad
 /* ─── header ─── */
 header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1px solid var(--line)}
 .topbar{display:flex;align-items:center;gap:2px;padding:8px 0 6px}
-.period{flex:1;font-size:21px;font-weight:800;letter-spacing:-.03em;text-align:center;min-width:0}
-.nav{width:48px;height:48px;flex:none;border-radius:var(--r);display:grid;place-items:center;font-size:30px;line-height:1;color:var(--soft)}
+.period{flex:1;font-size:19px;font-weight:800;letter-spacing:-.03em;text-align:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{width:44px;height:48px;flex:none;border-radius:var(--r);display:grid;place-items:center;font-size:30px;line-height:1;color:var(--soft)}
 .nav:active{background:var(--fill)}
-.gear{width:48px;height:48px;flex:none;border-radius:var(--r);display:grid;place-items:center;font-size:22px;color:var(--soft)}
+.gear{width:42px;height:48px;flex:none;border-radius:var(--r);display:grid;place-items:center;font-size:22px;color:var(--soft)}
+.gear:active{background:var(--fill)}
+#reload.spin{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#reload.spin{animation:none;opacity:.4}}
 .rowseg{display:flex;gap:8px;padding-bottom:8px;align-items:center}
 .seg{display:flex;background:var(--fill);border-radius:var(--r);padding:3px;flex:1;min-width:0}
 .seg button{flex:1;padding:9px 2px;border-radius:9px;font-size:14px;font-weight:700;color:var(--soft);white-space:nowrap}
@@ -278,6 +282,7 @@ input[type=file]{width:100%;font-size:15px}
       <button class="nav" id="prev" aria-label="이전">‹</button>
       <div class="period" id="period"></div>
       <button class="nav" id="next" aria-label="다음">›</button>
+      <button class="gear" id="reload" aria-label="새로고침">↻</button>
       <button class="gear" id="admin" aria-label="관리자">⚙</button>
     </div>
     <div class="rowseg">
@@ -306,7 +311,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v19 · 2026-09-28</div></div>
+<div class="wrap"><div class="ver">v21 · 2026-10-01 · <span id="synced">불러오는 중</span></div></div>
 
 
 
@@ -1033,7 +1038,53 @@ async function refresh(){
   DATA = await jsonp("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
   saveCache(DATA);
   render();
+  stamp();
 }
+
+/* ─── 최신 일정 유지 ───
+ * 화면을 보고 있는 동안 30초마다 확인한다. 바뀐 게 없으면 화면을 건드리지 않는다.
+ * 다른 앱에 갔다 돌아오면 바로 확인한다. ↻ 버튼으로 언제든 직접 확인할 수 있다.
+ */
+const SYNC_MS = 30000;
+let lastSync = 0, syncing = false;
+
+function stamp(){
+  const t = new Date();
+  const el = $("synced");
+  if(el) el.textContent = `업데이트 ${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+}
+
+async function sync(manual){
+  if(syncing) return;
+  syncing = true; lastSync = Date.now();
+  if(manual) $("reload").classList.add("spin");
+  try{
+    const fresh = await jsonp("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
+    const changed = JSON.stringify(fresh) !== JSON.stringify(DATA);
+    if(changed){
+      // 대기 중인 요청이 늘었으면 관리자에게 바로 알린다
+      const waitOf = d => (d.requests||[]).filter(r => r.status === "wait").length;
+      const more = adminPin ? waitOf(fresh) - waitOf(DATA) : 0;
+
+      DATA = fresh; saveCache(DATA); render();
+      if(openSheet === "sheetAdmin") renderRequests();
+
+      if(more > 0) toast(`새 요청 ${more}건이 들어왔습니다`);
+      else         toast(manual ? "최신 일정으로 바꿨습니다" : "새 내용이 반영됐습니다");
+    }else if(manual){
+      toast("이미 최신입니다");
+    }
+    stamp();
+    const b = $("banner"); if(b) b.remove();
+  }catch(e){
+    if(manual) toast("불러오지 못했습니다. 잠시 뒤 다시 눌러 주세요");
+  }finally{
+    syncing = false;
+    $("reload").classList.remove("spin");
+  }
+}
+
+$("reload").onclick = () => sync(true);
 
 async function boot(){
   const c = loadCache();
@@ -1050,24 +1101,32 @@ async function boot(){
     if(delay) await wait(delay);
     try{ await refresh(); ok = true; break; }catch(e){ if(!c) render(); }
   }
+  lastSync = Date.now();
 
   if(ok){
     const b = $("banner"); if(b) b.remove();
   }else{
     $("banner").textContent = c
       ? "연결이 안 돼 마지막으로 받은 일정을 보여주고 있습니다."
-      : "일정을 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.";
+      : "일정을 불러오지 못했습니다. 위의 ↻ 를 눌러 다시 시도해 주세요.";
   }
+
+  // 지금·오늘 화면은 1분마다 시각에 맞춰 다시 그린다
   setInterval(() => {
     if(view==="now") { renderNow(); addGameBar(); }
     else if(view==="day" && isToday(anchor)) { renderDay(); addGameBar(); }
   }, 60000);
 
-  loadGame();
-  setInterval(loadGame, 300000);                                  // 5분마다
-  document.addEventListener("visibilitychange", () => {           // 화면 복귀 시
-    if(!document.hidden) loadGame();
+  // 보고 있는 동안만 30초마다 확인한다 (화면이 꺼져 있으면 쉬어서 배터리를 아낀다)
+  setInterval(() => { if(!document.hidden) sync(false); }, SYNC_MS);
+  document.addEventListener("visibilitychange", () => {
+    if(document.hidden) return;
+    if(Date.now() - lastSync > 5000) sync(false);   // 돌아오면 바로 확인
+    loadGame();
   });
+
+  loadGame();
+  setInterval(loadGame, 300000);
 }
 boot();
 </script>
