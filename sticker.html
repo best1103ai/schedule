@@ -177,7 +177,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v9</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v10</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -442,13 +442,16 @@ function jsonp(params){
     document.body.appendChild(tag);
   });
 }
-async function load(){
+async function load(retrying){
   try{
     if(!API_URL){ S = Mock.state(); }
     else { const j = await jsonp('t=' + Date.now()); if(j.error) throw new Error(j.error); S = j; }
     render();
     checkSettleEvent();
-  }catch(e){ if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}<br>새로고침해 주세요.</p></section>`; }
+  }catch(e){
+    if(!retrying){ setTimeout(() => load(true), 2000); return; }
+    if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></section>`;
+  }
 }
 
 /* ── 주간 정산 애니메이션 (아이 화면에서, 새 정산 결과를 처음 볼 때 한 번) ── */
