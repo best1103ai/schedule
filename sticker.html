@@ -177,7 +177,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v10</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v11</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -434,7 +434,7 @@ function jsonp(params){
   return new Promise((ok, fail) => {
     const cb = 'st' + Date.now() + Math.floor(Math.random()*1000);
     const tag = document.createElement('script');
-    const timer = setTimeout(() => { done(); fail(new Error('응답이 없어요. 잠시 후 다시 해 주세요')); }, 30000);
+    const timer = setTimeout(() => { done(); fail(new Error('응답이 없어요. 잠시 후 다시 해 주세요')); }, 60000);
     function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
     window[cb] = d => { done(); ok(d); };
     tag.onerror = () => { done(); fail(new Error('연결하지 못했어요. 인터넷을 확인해 주세요')); };
