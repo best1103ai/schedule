@@ -311,7 +311,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v21 · 2026-10-01 · <span id="synced">불러오는 중</span></div></div>
+<div class="wrap"><div class="ver">v22 · 2026-10-05 · <span id="synced">불러오는 중</span></div></div>
 
 
 
@@ -977,7 +977,7 @@ let GAME = null;
 async function loadGame(){
   if(!STICKER_API) return;
   try{
-    GAME = await jsonp("game=1", STICKER_API);
+    GAME = await getJSON("game=1", STICKER_API);
   }catch(e){ GAME = null; }
   addGameBar();
 }
@@ -1005,6 +1005,27 @@ function addGameBar(){
 }
 
 /* ─── 데이터 ─── */
+/* 데이터 받아오기
+ * 1) 먼저 로그인 정보(쿠키)를 싣지 않고 받는다.
+ *    크롬에 구글 계정이 여러 개 로그인돼 있으면 Apps Script 가
+ *    "현재 파일을 열 수 없습니다" 화면을 돌려주는데, 쿠키가 없으면 이 문제가 생기지 않는다.
+ * 2) 그게 안 되는 환경이면 예전 방식(JSONP)으로 받는다.
+ */
+async function getJSON(params, base){
+  const url = (base || API_URL) + "?" + params;
+  try{
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 12000);
+    const res = await fetch(url, {credentials: "omit", cache: "no-store", signal: ctl.signal});
+    clearTimeout(timer);
+    if(res.ok){
+      const data = JSON.parse(await res.text());   // 오류 화면(HTML)이면 여기서 실패해 아래로 넘어간다
+      if(data && typeof data === "object") return data;
+    }
+  }catch(e){}
+  return jsonp(params, base);
+}
+
 function jsonp(params, base){
   return new Promise((ok, fail) => {
     const cb = "cb" + Date.now() + Math.floor(Math.random()*1000);
@@ -1035,7 +1056,7 @@ function loadCache(){
 }
 
 async function refresh(){
-  DATA = await jsonp("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
+  DATA = await getJSON("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
   saveCache(DATA);
   render();
   stamp();
@@ -1059,7 +1080,7 @@ async function sync(manual){
   syncing = true; lastSync = Date.now();
   if(manual) $("reload").classList.add("spin");
   try{
-    const fresh = await jsonp("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
+    const fresh = await getJSON("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
     const changed = JSON.stringify(fresh) !== JSON.stringify(DATA);
     if(changed){
       // 대기 중인 요청이 늘었으면 관리자에게 바로 알린다
