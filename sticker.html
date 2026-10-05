@@ -152,9 +152,9 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
 #toast.on{opacity:1}
-body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,transparent,var(--k),transparent);background-size:50% 100%;animation:ld 1s linear infinite;z-index:9}
+body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,transparent,var(--k),transparent);background-size:50% 100%;animation:ld 1s linear infinite;z-index:9}
 @keyframes ld{from{background-position:-50% 0}to{background-position:150% 0}}
-@media (prefers-reduced-motion:reduce){body.busy::before{animation:none}#toast{transition:none}}
+@media (prefers-reduced-motion:reduce){body.busy::before,body.sync::before{animation:none}#toast{transition:none}}
 
 /* ── 주간 정산 결과 화면 ── */
 .settle-ov{position:fixed;inset:0;background:rgba(20,26,46,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;transition:opacity .3s;padding:20px}
@@ -177,7 +177,7 @@ body.busy::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;b
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v11</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v12</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -443,15 +443,17 @@ function jsonp(params){
   });
 }
 async function load(retrying){
+  document.body.classList.add('sync');
   try{
     if(!API_URL){ S = Mock.state(); }
-    else { const j = await jsonp('t=' + Date.now()); if(j.error) throw new Error(j.error); S = j; }
+    else { const j = await jsonp('t=' + Date.now()); if(j.error) throw new Error(j.error); S = j; ls('state', JSON.stringify(j)); }
     render();
     checkSettleEvent();
   }catch(e){
     if(!retrying){ setTimeout(() => load(true), 2000); return; }
     if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></section>`;
-  }
+    else toast('최신 내용을 못 불러왔어요. 잠시 후 다시 확인할게요');
+  }finally{ document.body.classList.remove('sync'); }
 }
 
 /* ── 주간 정산 애니메이션 (아이 화면에서, 새 정산 결과를 처음 볼 때 한 번) ── */
@@ -500,7 +502,7 @@ async function call(action, data = {}){
     const q = {action, pin: PIN, ...data};
     const res = !API_URL ? Mock.run(q) : await jsonp('payload=' + encodeURIComponent(JSON.stringify(q)));
     if(!res.ok) throw new Error(res.error || '저장하지 못했어요');
-    S = res.state; lastRet = res.ret; render(); return true;
+    S = res.state; lastRet = res.ret; ls('state', JSON.stringify(S)); render(); return true;
   }catch(e){
     toast(e.message);
     if(/PIN/.test(e.message)){ PIN = ''; ls('pin',''); V.pinOk = false; render(); }
@@ -629,6 +631,7 @@ const Mock = (() => {
   return {state, run};
 })();
 
+if(API_URL){ try{ const c = ls('state'); if(c) S = JSON.parse(c); }catch(e){ S = null; } }
 render(); load();
 </script>
 </body>
