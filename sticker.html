@@ -177,7 +177,7 @@ body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;heigh
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v13</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v14</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -434,9 +434,9 @@ function dadView(){
    구글 계정 정보가 같이 가서, 회사 계정 등 여러 계정이 로그인돼 있으면 구글이
    "파일을 열 수 없습니다"로 막는 경우가 있었다. fetch는 기본적으로 다른 사이트에
    로그인 정보를 보내지 않으므로(credentials:'omit') 항상 로그인 안 된 상태로 접속한다. */
-async function jsonp(params){
+async function jsonp(params, ms){
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 60000);
+  const timer = setTimeout(() => ctl.abort(), ms || 60000);
   let res;
   try{
     res = await fetch(API_URL + '?' + params, {credentials: 'omit', cache: 'no-store', signal: ctl.signal});
@@ -447,15 +447,17 @@ async function jsonp(params){
   try{ return JSON.parse(text); }
   catch(e){ throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 해 주세요'); }
 }
-async function load(retrying){
+async function load(attempt){
+  attempt = attempt || 1;
   document.body.classList.add('sync');
   try{
     if(!API_URL){ S = Mock.state(); }
-    else { const j = await jsonp('t=' + Date.now()); if(j.error) throw new Error(j.error); S = j; ls('state', JSON.stringify(j)); }
+    else { const j = await jsonp('t=' + Date.now(), 15000); if(j.error) throw new Error(j.error); S = j; ls('state', JSON.stringify(j)); }
     render();
     checkSettleEvent();
   }catch(e){
-    if(!retrying){ setTimeout(() => load(true), 2000); return; }
+    /* 서버는 보통 5초 안에 답한다. 15초 넘게 멈춘 요청은 버리고 새로 요청한다 (조회만 재시도 — 체크 같은 쓰기는 재시도하면 취소될 수 있어서 안 함) */
+    if(attempt < 3){ setTimeout(() => load(attempt + 1), 1000); return; }
     if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></section>`;
     else toast('최신 내용을 못 불러왔어요. 잠시 후 다시 확인할게요');
   }finally{ document.body.classList.remove('sync'); }
