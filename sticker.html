@@ -177,7 +177,7 @@ body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;heigh
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v12</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v13</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -430,17 +430,22 @@ function dadView(){
 }
 
 /* ── 서버 ── */
-function jsonp(params){
-  return new Promise((ok, fail) => {
-    const cb = 'st' + Date.now() + Math.floor(Math.random()*1000);
-    const tag = document.createElement('script');
-    const timer = setTimeout(() => { done(); fail(new Error('응답이 없어요. 잠시 후 다시 해 주세요')); }, 60000);
-    function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
-    window[cb] = d => { done(); ok(d); };
-    tag.onerror = () => { done(); fail(new Error('연결하지 못했어요. 인터넷을 확인해 주세요')); };
-    tag.src = API_URL + '?' + params + '&callback=' + cb;
-    document.body.appendChild(tag);
-  });
+/* 서버 요청. 예전에는 <script> 태그(JSONP)로 불렀는데, 그 방식은 브라우저에 로그인된
+   구글 계정 정보가 같이 가서, 회사 계정 등 여러 계정이 로그인돼 있으면 구글이
+   "파일을 열 수 없습니다"로 막는 경우가 있었다. fetch는 기본적으로 다른 사이트에
+   로그인 정보를 보내지 않으므로(credentials:'omit') 항상 로그인 안 된 상태로 접속한다. */
+async function jsonp(params){
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 60000);
+  let res;
+  try{
+    res = await fetch(API_URL + '?' + params, {credentials: 'omit', cache: 'no-store', signal: ctl.signal});
+  }catch(e){
+    throw new Error(e.name === 'AbortError' ? '응답이 없어요. 잠시 후 다시 해 주세요' : '연결하지 못했어요. 인터넷을 확인해 주세요');
+  }finally{ clearTimeout(timer); }
+  const text = await res.text();
+  try{ return JSON.parse(text); }
+  catch(e){ throw new Error('서버 응답을 읽지 못했어요. 잠시 후 다시 해 주세요'); }
 }
 async function load(retrying){
   document.body.classList.add('sync');
