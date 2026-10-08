@@ -311,7 +311,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v22 · 2026-10-05 · <span id="synced">불러오는 중</span></div></div>
+<div class="wrap"><div class="ver">v23 · 2026-10-08 · <span id="synced">불러오는 중</span></div></div>
 
 
 
@@ -444,6 +444,10 @@ function eventsOn(date){
     else       list.push({...s});
   });
   ov.filter(o => o.kind==="add").forEach(o => list.push({...o, added:true}));
+  // 반복 일정에 연결되지 않은 일회성 휴강도 화면에 남긴다.
+  // 예: 다른 날로 옮긴 보강수업이 당일 선생님 사정으로 다시 취소된 경우.
+  ov.filter(o => o.kind==="cancel" && !o.targetId && o.title)
+    .forEach(o => list.push({...o, off:true, added:true}));
   // 빨간날에는 학교·방과후·대부분의 학원이 쉰다. 시트에서 '진행'으로 표시한 것만 남긴다.
   if(holidayOn(date)) return list.filter(e => e.hol || e.added)
                                  .sort((a,b) => mins(a.start) - mins(b.start));
@@ -1080,6 +1084,14 @@ async function sync(manual){
   syncing = true; lastSync = Date.now();
   if(manual) $("reload").classList.add("spin");
   try{
+    // 수동 ↻ 은 서버의 5분 캐시를 먼저 비우고 실제 시트에서 다시 읽는다.
+    // doPost는 모든 쓰기 요청 시작 시 bust()를 실행하므로 데이터 자체는 바꾸지 않는다.
+    if(manual){
+      try{
+        await fetch(API_URL, {method:"POST", mode:"no-cors",
+          body:JSON.stringify({action:"refresh"})});
+      }catch(e){}
+    }
     const fresh = await getJSON("action=all" + (adminPin ? "&pin="+encodeURIComponent(adminPin) : ""));
     const changed = JSON.stringify(fresh) !== JSON.stringify(DATA);
     if(changed){
