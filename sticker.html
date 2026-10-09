@@ -21,6 +21,9 @@ body[data-kid=mj]{--k:var(--mj)} body[data-kid=me]{--k:var(--me)}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5;-webkit-text-size-adjust:100%}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
+button.saving{opacity:.58;pointer-events:none}
+.row.saving .st::after{content:'저장 중';font-size:12px;color:var(--mute)}
+.row.saving .st{font-size:0}
 :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .wrap{max-width:560px;margin:0 auto;padding:12px 16px calc(40px + env(safe-area-inset-bottom))}
 h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
@@ -177,7 +180,7 @@ body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;heigh
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v14</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v15</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
     <button data-act="who" data-v="민재">민재</button>
@@ -199,7 +202,7 @@ const KID_LOCK = ({mj:'민준', me:'민재'})[new URLSearchParams(location.searc
 /* 칭찬 전용 링크: sticker.html?praise=1&pin=1103 → 승인·DP·설정 없이 "칭찬 주기"만 (엄마·할머니·할아버지용) */
 const PRAISE_MODE = new URLSearchParams(location.search).get('praise') === '1';
 const DOW = '일월화수목금토';
-let S = null, busy = false, PIN = ls('pin') || '', lastRet = null;
+let S = null, busy = false, loadBusy = false, loadQueued = false, PIN = ls('pin') || '', lastRet = null;
 const V = {who: KID_LOCK || ls('who') || '민준', tab: 'today', date: null, open: null, edit: null, wk: null, bk: {}, pinOk: !!(ls('pin'))};
 if(PRAISE_MODE){
   const up = new URLSearchParams(location.search).get('pin');
@@ -219,6 +222,13 @@ function toastUndo(m, id){
   t.innerHTML = esc(m) + (id ? ` <button class="linkbtn" style="color:#fff;text-decoration:underline;margin-left:6px" data-act="undopd" data-v="${id}">되돌리기</button>` : '');
   t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 5000);
 }
+
+function reqId(){
+  try{ if(crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+}
+function viewMode(){ return PRAISE_MODE ? 'praise' : (V.who === '아빠' ? 'dad' : 'kid'); }
+function markSaving(btn, on){ if(!btn) return; btn.classList.toggle('saving', !!on); btn.disabled = !!on; }
 
 /* ── 계산 ── */
 const recOf = (kid, d, item, kind) => S.records.find(r => r.아이===kid && r.날짜===d && r.항목===item && r.종류===kind);
@@ -449,18 +459,31 @@ async function jsonp(params, ms){
 }
 async function load(attempt){
   attempt = attempt || 1;
+  if(loadBusy){ loadQueued = true; return; }
+  loadBusy = true;
   document.body.classList.add('sync');
   try{
     if(!API_URL){ S = Mock.state(); }
-    else { const j = await jsonp('t=' + Date.now(), 15000); if(j.error) throw new Error(j.error); S = j; ls('state', JSON.stringify(j)); }
+    else {
+      const j = await jsonp('t=' + Date.now() + '&view=' + encodeURIComponent(viewMode()), 15000);
+      if(j.error) throw new Error(j.error);
+      S = j; ls('state', JSON.stringify(j));
+    }
     render();
     checkSettleEvent();
   }catch(e){
-    /* 서버는 보통 5초 안에 답한다. 15초 넘게 멈춘 요청은 버리고 새로 요청한다 (조회만 재시도 — 체크 같은 쓰기는 재시도하면 취소될 수 있어서 안 함) */
-    if(attempt < 3){ setTimeout(() => load(attempt + 1), 1000); return; }
+    if(attempt < 3){
+      loadBusy = false;
+      setTimeout(() => load(attempt + 1), 1000);
+      return;
+    }
     if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></section>`;
     else toast('최신 내용을 못 불러왔어요. 잠시 후 다시 확인할게요');
-  }finally{ document.body.classList.remove('sync'); }
+  }finally{
+    loadBusy = false;
+    document.body.classList.remove('sync');
+    if(loadQueued){ loadQueued = false; setTimeout(() => load(), 0); }
+  }
 }
 
 /* ── 주간 정산 애니메이션 (아이 화면에서, 새 정산 결과를 처음 볼 때 한 번) ── */
@@ -503,70 +526,86 @@ function showSettleOverlay(kid, evt){
   div.addEventListener('click', e => { if(e.target === div || e.target.tagName === 'BUTTON') close(); });
   setTimeout(close, 9000);
 }
-async function call(action, data = {}){
-  if(busy) return false; busy = true; document.body.classList.add('busy');
+async function sendWrite(q){
+  let lastErr;
+  for(let attempt=1; attempt<=2; attempt++){
+    try{ return await jsonp('payload=' + encodeURIComponent(JSON.stringify(q)), 15000); }
+    catch(e){ lastErr = e; if(attempt < 2) await new Promise(r => setTimeout(r, 500)); }
+  }
+  throw lastErr;
+}
+async function call(action, data = {}, btn){
+  if(busy) return false;
+  busy = true; markSaving(btn, true); document.body.classList.add('busy');
+  const requestId = reqId();
   try{
-    const q = {action, pin: PIN, ...data};
-    const res = !API_URL ? Mock.run(q) : await jsonp('payload=' + encodeURIComponent(JSON.stringify(q)));
-    if(!res.ok) throw new Error(res.error || '저장하지 못했어요');
-    S = res.state; lastRet = res.ret; ls('state', JSON.stringify(S)); render(); return true;
+    const q = {action, pin: PIN, requestId, view: viewMode(), ...data};
+    const res = !API_URL ? Mock.run(q) : await sendWrite(q);
+    if(!res.ok) {
+      if(res.uncertain){ toast('저장 결과를 확인하고 있어요. 최신 화면을 다시 불러올게요'); setTimeout(() => load(), 0); }
+      throw new Error(res.error || '저장하지 못했어요');
+    }
+    lastRet = res.ret;
+    if(res.state){ S = res.state; ls('state', JSON.stringify(S)); render(); }
+    else if(res.refreshNeeded){ toast('저장은 완료됐어요. 최신 화면을 다시 불러올게요'); setTimeout(() => load(), 0); }
+    return true;
   }catch(e){
-    toast(e.message);
+    if(!/확인하고 있어요/.test(e.message)) toast(e.message);
     if(/PIN/.test(e.message)){ PIN = ''; ls('pin',''); V.pinOk = false; render(); }
     return false;
-  }finally{ busy = false; document.body.classList.remove('busy'); }
+  }finally{ busy = false; markSaving(btn, false); document.body.classList.remove('busy'); }
 }
 
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b || b.disabled) return;
   const a = b.dataset.act, v = b.dataset.v, id = b.dataset.id;
   switch(a){
-    case 'who': if(KID_LOCK) return; V.who = v; ls('who', v); V.tab = 'today'; V.date = null; V.open = null; V.wk = null; render(); scrollTo(0,0); break;
+    case 'who': if(KID_LOCK) return; V.who = v; ls('who', v); V.tab = 'today'; V.date = null; V.open = null; V.wk = null; render(); scrollTo(0,0); if(v==='아빠' && V.pinOk) load(); break;
     case 'tab': V.tab = v; render(); break;
     case 'date': V.date = v === S.today ? null : v; render(); break;
     case 'open': V.open = V.open === v ? null : v; render(); break;
     case 'wk': V.wk = addDays(V.wk || monday(S.today), +v); render(); break;
-    case 'chk': await call('check', {kid: V.who, date: V.date || S.today, item: b.dataset.item, kind: b.dataset.kind}); break;
+    case 'chk': { const d=V.date||S.today, item=b.dataset.item, kind=b.dataset.kind; const keyItem=kind==='hw'?'내일숙제':item; const ex=S.records.find(r=>r.아이===V.who&&r.날짜===d&&r.항목===keyItem&&r.종류===kind); const want=ex&&ex.상태==='대기'?'none':'pending'; await call('check', {kid:V.who,date:d,item,kind,want}, b); break; }
     case 'book': {
       const t = $('#bt').value.trim(); if(!t){ toast('책 제목을 적어주세요'); return; }
-      if(await call('check', {kid: V.who, date: V.date || S.today, kind: 'book', memo: t, stickers: $('#bstk').value})) toast('아빠에게 확인 요청했어요');
+      if(await call('check', {kid: V.who, date: V.date || S.today, kind: 'book', memo: t, stickers: $('#bstk').value, want:'pending'}, b)) toast('아빠에게 확인 요청했어요');
       break;
     }
-    case 'cancel': await call('cancel', {id}); break;
-    case 'login': PIN = $('#pin').value.trim(); if(await call('login')){ V.pinOk = true; ls('pin', PIN); render(); } break;
+    case 'cancel': await call('cancel', {id}, b); break;
+    case 'login': PIN = $('#pin').value.trim(); if(await call('login', {}, b)){ V.pinOk = true; ls('pin', PIN); render(); } break;
     case 'plogin': PIN = $('#pin').value.trim(); V.pinOk = true; render(); break;
-    case 'praise2': { if(await call('praise', {kid: v})) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
-    case 'undopd': { if(await call('cancelPd', {id: v})) toast('되돌렸어요'); break; }
+    case 'praise2': { if(await call('praise', {kid: v}, b)) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'undopd': { if(await call('cancelPd', {id: v}, b)) toast('되돌렸어요'); break; }
     case 'logout': PIN = ''; ls('pin',''); V.pinOk = false; render(); break;
     case 'bk': V.bk[id] = +v; render(); break;
-    case 'ap': await call('approve', {ids: [id], stickers: V.bk}); break;
-    case 'apall': await call('approve', {ids: S.records.filter(r => r.상태==='대기').map(r => r.id), stickers: V.bk}); break;
-    case 'rj': await call('reject', {ids: [id]}); break;
-    case 'undo': await call('undo', {id}); break;
+    case 'ap': await call('approve', {ids: [id], stickers: V.bk}, b); break;
+    case 'apall': await call('approve', {ids: S.records.filter(r => r.상태==='대기').map(r => r.id), stickers: V.bk}, b); break;
+    case 'rj': await call('reject', {ids: [id]}, b); break;
+    case 'undo': await call('undo', {id}, b); break;
     case 'edit': V.edit = V.edit === v ? null : v; render(); break;
     case 'saveb': {
       const [kid, item] = v.split('|');
-      if(await call('saveBoard', {kid, item, target: $('#et').value, start: $('#es').value, reason: $('#er').value})){ V.edit = null; render(); toast('저장했어요'); }
+      if(await call('saveBoard', {kid, item, target: $('#et').value, start: $('#es').value, reason: $('#er').value}, b)){ V.edit = null; render(); toast('저장했어요'); }
       break;
     }
     case 'gift': {
-      if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value})) toast('선물 사용을 기록했어요');
+      if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value}, b)) toast('선물 사용을 기록했어요');
       break;
     }
-    case 'praise': { if(await call('praise', {kid: v})) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
-    case 'dp': { if(await call('dp', {kid: v})) toastUndo(v + ' DP +1', lastRet); break; }
-    case 'settlenow': { if(await call('settleNow')) toast('정산했어요'); break; }
+    case 'praise': { if(await call('praise', {kid: v}, b)) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'dp': { if(await call('dp', {kid: v}, b)) toastUndo(v + ' DP +1', lastRet); break; }
+    case 'settlenow': { if(await call('settleNow', {}, b)) toast('정산했어요'); break; }
     case 'bookdone': {
-      if(await call('bookdone', {kid: $('#bkk').value})) toast('책걸이 +1');
+      if(await call('bookdone', {kid: $('#bkk').value}, b)) toast('책걸이 +1');
       break;
     }
     case 'useparty': {
-      if(await call('useParty', {kid: $('#pkk').value, count: 1, content: $('#pc').value})) toast('책걸이 사용을 기록했어요');
+      if(await call('useParty', {kid: $('#pkk').value, count: 1, content: $('#pc').value}, b)) toast('책걸이 사용을 기록했어요');
       break;
     }
     case 'saveset': {
       const y = S.today.slice(0,4);
-      if(await call('setSetting', {values: {'할당량_민준': $('#q1').value, '할당량_민재': $('#q2').value, '게임분': $('#gm').value, ['큰선물_'+y]: $('#bg').value}})) toast('설정을 저장했어요');
+      if(await call('setSetting', {values: {'할당량_민준': $('#q1').value, '할당량_민재': $('#q2').value, '게임분': $('#gm').value, ['큰선물_'+y]: $('#bg').value}}, b)) toast('설정을 저장했어요');
       break;
     }
   }
@@ -618,8 +657,9 @@ const Mock = (() => {
           const item = p.kind === 'hw' ? '내일숙제' : p.item;
           const it = db.items.find(i => i.아이===p.kid && i.항목===p.item);
           const ex = db.recs.find(r => r.아이===p.kid && r.날짜===p.date && r.항목===item && r.종류===p.kind);
-          if(ex){ if(ex.상태==='대기') db.recs.splice(db.recs.indexOf(ex),1); else if(ex.상태==='반려'){ ex.상태='대기'; ex.처리시각=''; } else throw new Error('아빠가 이미 확인했어요'); break; }
-          add({날짜:p.date, 아이:p.kid, 항목:item, 종류:p.kind, 스티커: p.kind==='daily' && it && it.스티커==='매일' ? '1' : '0', 상태:'대기'});
+          if(p.want==='none'){ if(ex && ex.상태==='대기') db.recs.splice(db.recs.indexOf(ex),1); else if(ex) throw new Error('아빠가 이미 확인했어요'); break; }
+          if(ex){ if(ex.상태==='대기') break; else if(ex.상태==='반려'){ ex.상태='대기'; ex.처리시각=''; } else throw new Error('아빠가 이미 확인했어요'); break; }
+          add({id:p.requestId, 날짜:p.date, 아이:p.kid, 항목:item, 종류:p.kind, 스티커: p.kind==='daily' && it && it.스티커==='매일' ? '1' : '0', 상태:'대기'});
           break;
         }
         case 'cancel': { const r = find(p.id); if(r && r.상태==='대기') db.recs.splice(db.recs.indexOf(r),1); break; }
