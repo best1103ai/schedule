@@ -271,6 +271,8 @@ input[type=file]{width:100%;font-size:15px}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.skel i{animation:none}}
 .banner{background:#fef3c7;color:#92400e;font-size:14px;padding:10px 14px;text-align:center}
+.perfbox{display:none;position:fixed;left:8px;right:8px;bottom:8px;z-index:99;max-height:42vh;overflow:auto;background:rgba(17,24,39,.94);color:#fff;border-radius:10px;padding:10px 12px;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+.perfbox.on{display:block}
 </style>
 </head>
 <body>
@@ -311,7 +313,8 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v23 · 2026-10-08 · <span id="synced">불러오는 중</span></div></div>
+<div class="wrap"><div class="ver">v24 · 2026-10-09 · <span id="synced">불러오는 중</span></div></div>
+<div class="perfbox" id="perfbox"></div>
 
 
 
@@ -407,6 +410,31 @@ const DOW  = ["일","월","화","수","목","금","토"];
 const $ = id => document.getElementById(id);
 const viewEl = $("view");
 
+/* ─── v24 성능 진단 (?perf=1 에서만 표시) ─── */
+const PERF = new URLSearchParams(location.search).get("perf") === "1";
+const PERF_DATA = {renders:{}, api:{}, cache:{}};
+function perfMs(n){ return Math.round(n*10)/10; }
+function perfShow(){
+  if(!PERF) return;
+  const el = $("perfbox"); if(!el) return;
+  el.classList.add("on");
+  const s = PERF_DATA.server || {};
+  const a = PERF_DATA.api || {};
+  const r = PERF_DATA.renders || {};
+  el.textContent = [
+    "성능 진단 v24",
+    `브라우저 API 왕복: ${a.roundTripMs ?? "-"} ms`,
+    `JSON 파싱: ${a.parseMs ?? "-"} ms`,
+    `기기 캐시 읽기: ${PERF_DATA.cache.readMs ?? "-"} ms`,
+    `최근 화면 렌더: ${r.lastName || "-"} ${r.lastMs ?? "-"} ms`,
+    `Apps Script: ${s.serverMs ?? "-"} ms · cache ${s.cacheHit===true?"HIT":s.cacheHit===false?"MISS":"-"}`,
+    `시트 열기: ${s.spreadsheetOpenMs ?? "-"} ms`,
+    `schedule ${s.scheduleMs ?? "-"} · overrides ${s.overridesMs ?? "-"} · holidays ${s.holidaysMs ?? "-"} ms`,
+    `todos ${s.todosMs ?? "-"} · notices ${s.noticesMs ?? "-"} · requests ${s.requestsMs ?? "-"} ms`,
+    `payload ${s.payloadChars ?? "-"} chars`
+  ].join("\n");
+}
+
 /* ─── 날짜 ─── */
 const pad = n => String(n).padStart(2,"0");
 const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -490,6 +518,7 @@ function spList(from, to, title){
 
 /* ─── 렌더 ─── */
 function render(){
+  const _rt = performance.now();
   const list   = view === "notices" || view === "todos";   // 목록 화면은 달력 조작이 없다
   const arrows = !list && !["now","day","tmr"].includes(view);
   $("prev").style.visibility = arrows ? "visible" : "hidden";
@@ -500,6 +529,7 @@ function render(){
   ({now:renderNow, day:renderDay, tmr:renderDay, d3:renderD3, week:renderWeek,
     month:renderMonth, notices:renderNotices, todos:renderTodos}[view])();
   addGameBar();
+  if(PERF){ PERF_DATA.renders.lastName = view; PERF_DATA.renders.lastMs = perfMs(performance.now()-_rt); perfShow(); }
 }
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
@@ -1016,14 +1046,25 @@ function addGameBar(){
  * 2) 그게 안 되는 환경이면 예전 방식(JSONP)으로 받는다.
  */
 async function getJSON(params, base){
-  const url = (base || API_URL) + "?" + params;
+  const isMain = !base || base === API_URL;
+  const q = isMain && PERF ? params + (params ? "&" : "") + "perf=1" : params;
+  const url = (base || API_URL) + "?" + q;
+  const _apiStart = performance.now();
   try{
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 12000);
     const res = await fetch(url, {credentials: "omit", cache: "no-store", signal: ctl.signal});
     clearTimeout(timer);
     if(res.ok){
-      const data = JSON.parse(await res.text());   // 오류 화면(HTML)이면 여기서 실패해 아래로 넘어간다
+      const txt = await res.text();
+      const _parseStart = performance.now();
+      const data = JSON.parse(txt);   // 오류 화면(HTML)이면 여기서 실패해 아래로 넘어간다
+      if(PERF && isMain){
+        PERF_DATA.api.roundTripMs = perfMs(performance.now()-_apiStart);
+        PERF_DATA.api.parseMs = perfMs(performance.now()-_parseStart);
+        if(data && data._perf) PERF_DATA.server = data._perf;
+        perfShow();
+      }
       if(data && typeof data === "object") return data;
     }
   }catch(e){}
@@ -1038,7 +1079,8 @@ function jsonp(params, base){
     function done(){ clearTimeout(timer); delete window[cb]; tag.remove(); }
     window[cb] = d => { done(); ok(d); };
     tag.onerror = () => { done(); fail(new Error("network")); };
-    tag.src = (base || API_URL) + "?" + params + "&callback=" + cb;
+    const q = (!base || base === API_URL) && PERF ? params + (params ? "&" : "") + "perf=1" : params;
+    tag.src = (base || API_URL) + "?" + q + "&callback=" + cb;
     document.body.appendChild(tag);
   });
 }
@@ -1051,12 +1093,14 @@ function saveCache(d){
   }catch(e){}
 }
 function loadCache(){
+  const _ct = performance.now();
   try{
     const v = localStorage.getItem(CACHE_KEY);
     if(!v) return null;
     const o = JSON.parse(v);
+    if(PERF){ PERF_DATA.cache.readMs = perfMs(performance.now()-_ct); perfShow(); }
     return o && o.d && o.d.schedule ? o : null;
-  }catch(e){ return null; }
+  }catch(e){ if(PERF){ PERF_DATA.cache.readMs = perfMs(performance.now()-_ct); perfShow(); } return null; }
 }
 
 async function refresh(){
