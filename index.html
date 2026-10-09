@@ -273,6 +273,9 @@ input[type=file]{width:100%;font-size:15px}
 .banner{background:#fef3c7;color:#92400e;font-size:14px;padding:10px 14px;text-align:center}
 .perfbox{display:none;position:fixed;left:8px;right:8px;bottom:8px;z-index:99;max-height:42vh;overflow:auto;background:rgba(17,24,39,.94);color:#fff;border-radius:10px;padding:10px 12px;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;box-shadow:0 4px 20px rgba(0,0,0,.25)}
 .perfbox.on{display:block}
+.reqalert{display:none;width:100%;margin:10px 0 0;padding:11px 14px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:15px;font-weight:800;text-align:left}
+.reqalert.on{display:block}
+.reqalert span{float:right;color:#c2410c}
 </style>
 </head>
 <body>
@@ -304,6 +307,7 @@ input[type=file]{width:100%;font-size:15px}
     </div>
   </div>
 </header>
+<div class="wrap"><button class="reqalert" id="reqAlert">🔔 확인할 일정 요청 <span id="reqAlertCount">0건</span></button></div>
 
 <main class="wrap" id="view"><div class="skel"><i></i><i></i></div></main>
 <div class="wrap footer">
@@ -313,7 +317,7 @@ input[type=file]{width:100%;font-size:15px}
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
 </div>
-<div class="wrap"><div class="ver">v25 · 2026-10-09 · <span id="synced">불러오는 중</span></div></div>
+<div class="wrap"><div class="ver">v26 · 2026-10-09 · <span id="synced">불러오는 중</span></div></div>
 <div class="perfbox" id="perfbox"></div>
 
 
@@ -399,7 +403,7 @@ const ADMIN_PIN = "1103";
 // 스티커판 Apps Script 웹앱 주소. 비워두면 게임 배너는 조용히 뜨지 않는다.
 const STICKER_API = "https://script.google.com/macros/s/AKfycbwdslf16nk_KgmMwVzof2_7qjUx5jGP3o_qPJBWdwWzMRR-CPgbPT-64ZYpW2xKviq2/exec";
 
-let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holidays:[]};
+let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holidays:[], requestCount:0};
 let view = "now";
 let anchor = new Date();
 let kidMode = "both";
@@ -519,6 +523,7 @@ function spList(from, to, title){
 /* ─── 렌더 ─── */
 function render(){
   const _rt = performance.now();
+  renderRequestAlert();
   const list   = view === "notices" || view === "todos";   // 목록 화면은 달력 조작이 없다
   const arrows = !list && !["now","day","tmr"].includes(view);
   $("prev").style.visibility = arrows ? "visible" : "hidden";
@@ -531,6 +536,14 @@ function render(){
   addGameBar();
   if(PERF){ PERF_DATA.renders.lastName = view; PERF_DATA.renders.lastMs = perfMs(performance.now()-_rt); perfShow(); }
 }
+
+function renderRequestAlert(){
+  const b = $("reqAlert"); if(!b) return;
+  const n = Number(DATA.requestCount || 0);
+  b.classList.toggle("on", n > 0);
+  $("reqAlertCount").textContent = `${n}건`;
+}
+$("reqAlert").onclick = () => $("admin").click();
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
 function tagOf(e){
@@ -929,7 +942,13 @@ function renderRequests(){
 }
 async function decide(id, status){
   const r = (DATA.requests||[]).find(x => x.id === id); if(!r) return;
-  r.status = status; renderRequests();
+  const wasWait = r.status === "wait";
+  r.status = status;
+  if(wasWait && status !== "wait"){
+    DATA.requestCount = Math.max(0, Number(DATA.requestCount||0) - 1);
+    renderRequestAlert();
+  }
+  renderRequests();
   try{ await fetch(API_URL, {method:"POST", mode:"no-cors",
         body:JSON.stringify({action:"setStatus", id, status, pin:adminPin})}); }
   catch(e){ toast("저장하지 못했습니다"); }
