@@ -193,7 +193,7 @@ header{position:sticky;top:0;z-index:20;background:var(--paper);border-bottom:1p
 .sheet h2{font-size:21px;margin:0 0 4px;letter-spacing:-.03em}
 .sheet .sub{margin:0 0 16px;color:var(--soft);font-size:15px}
 label{display:block;font-size:15px;font-weight:700;margin:16px 0 7px}
-select,input[type=date],textarea{width:100%;padding:14px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);font:inherit;color:inherit}
+select,input[type=date],input[type=time],input[type=text],textarea{width:100%;padding:14px;border:1px solid var(--line);border-radius:var(--r);background:var(--card);font:inherit;color:inherit}
 textarea{min-height:96px;resize:vertical}
 .row2{display:flex;gap:10px}.row2>*{flex:1}
 .req{border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:10px;background:var(--card)}
@@ -316,8 +316,9 @@ input[type=file]{width:100%;font-size:15px}
 </div>
 <div class="wrap footer2">
   <button class="btn main" id="reqOpen" style="width:100%">일정 변경 요청</button>
+  <button class="btn" id="directOpen" style="width:100%;margin-top:8px;display:none">일정 바로 반영</button>
 </div>
-<div class="wrap"><div class="ver">v26 · 2026-10-09 · <span id="synced">불러오는 중</span></div></div>
+<div class="wrap"><div class="ver">v27 · 2026-10-10 · <span id="synced">불러오는 중</span></div></div>
 <div class="perfbox" id="perfbox"></div>
 
 
@@ -341,6 +342,50 @@ input[type=file]{width:100%;font-size:15px}
   <label for="rText">요청 내용</label>
   <textarea id="rText" placeholder="예: 태권도 빠집니다. 가족 행사가 있어요."></textarea>
   <button class="btn main" id="rSend" style="margin-top:18px;width:100%">요청 보내기</button>
+</div></div>
+
+<div class="sheet" id="sheetDirect"><div class="in">
+  <div class="grip"></div>
+  <h2>일정 바로 반영</h2>
+  <p class="sub">PIN 확인 후 승인 없이 바로 스케줄에 반영합니다.</p>
+
+  <div class="row2">
+    <div><label for="dKind">무엇을 할까요</label>
+      <select id="dKind">
+        <option value="add">새 일정 추가</option>
+        <option value="change">기존 일정 변경</option>
+        <option value="skip">이번만 제외</option>
+      </select></div>
+    <div><label for="dKid">누구 일정</label>
+      <select id="dKid"><option value="mj">민준</option><option value="mje">민재</option></select></div>
+  </div>
+
+  <label for="dDate">날짜</label>
+  <input type="date" id="dDate">
+
+  <div id="dTargetWrap" style="display:none">
+    <label for="dTarget">기존 일정</label>
+    <select id="dTarget"></select>
+    <p class="sub" id="dTargetHelp" style="margin:7px 0 0"></p>
+  </div>
+
+  <div id="dTitleWrap">
+    <label for="dTitle">일정 이름</label>
+    <input type="text" id="dTitle" placeholder="예: 피아노">
+  </div>
+
+  <div id="dTimeWrap">
+    <div class="row2">
+      <div><label for="dStart">시작</label><input type="time" id="dStart"></div>
+      <div><label for="dEnd">종료</label><input type="time" id="dEnd"></div>
+    </div>
+    <label for="dPlace">장소</label>
+    <input type="text" id="dPlace" placeholder="예: 집, 양재">
+  </div>
+
+  <label for="dNote">메모 (선택)</label>
+  <textarea id="dNote" placeholder="예: 이번 주만 시간 변경"></textarea>
+  <button class="btn main" id="dSend" style="margin-top:18px;width:100%">확인 후 바로 반영</button>
 </div></div>
 
 <div class="sheet" id="sheetAdmin"><div class="in">
@@ -407,7 +452,7 @@ let DATA = {schedule:[], overrides:[], requests:[], notices:[], todos:[], holida
 let view = "now";
 let anchor = new Date();
 let kidMode = "both";
-let sel = null, noticeQ = "", adminPin = "", prevView = "now";
+let sel = null, noticeQ = "", adminPin = "", directPin = "", prevView = "now";
 
 const KIDS = {mj:"민준", mje:"민재"};
 const DOW  = ["일","월","화","수","목","금","토"];
@@ -524,6 +569,7 @@ function spList(from, to, title){
 function render(){
   const _rt = performance.now();
   renderRequestAlert();
+  renderDirectCapability();
   const list   = view === "notices" || view === "todos";   // 목록 화면은 달력 조작이 없다
   const arrows = !list && !["now","day","tmr"].includes(view);
   $("prev").style.visibility = arrows ? "visible" : "hidden";
@@ -544,6 +590,11 @@ function renderRequestAlert(){
   $("reqAlertCount").textContent = `${n}건`;
 }
 $("reqAlert").onclick = () => $("admin").click();
+
+function renderDirectCapability(){
+  const b = $("directOpen"); if(!b) return;
+  b.style.display = DATA.directEditEnabled === true ? "block" : "none";
+}
 
 function timeLabel(e){ return e.end ? `${e.start}–${e.end}` : e.start; }
 function tagOf(e){
@@ -914,6 +965,155 @@ $("tSend").onclick = async () => {
   }catch(e){ toast("추가하지 못했습니다"); }
 };
 
+/* ─── 일정 바로 반영 ─── */
+function baseSchedulesForDirect(){
+  const ds = $("dDate").value;
+  const kid = $("dKid").value;
+  if(!ds) return [];
+  const d = new Date(ds + "T00:00:00"), w = d.getDay();
+  return (DATA.schedule||[]).filter(s => {
+    if(s.kid !== kid) return false;
+    if(!s.dow || !s.dow.includes(w)) return false;
+    if(s.weeks && s.weeks.length && !s.weeks.includes(Math.floor((d.getDate()-1)/7)+1)) return false;
+    if(s.from && ds < s.from) return false;
+    if(s.to && ds > s.to) return false;
+    return true;
+  }).sort((a,b)=>mins(a.start)-mins(b.start));
+}
+
+function fillDirectTarget(){
+  const kind = $("dKind").value;
+  const addMode = kind === "add";
+  $("dTargetWrap").style.display = addMode ? "none" : "block";
+  $("dTitleWrap").style.display = addMode ? "block" : "none";
+  $("dTimeWrap").style.display = kind === "skip" ? "none" : "block";
+
+  if(addMode) return;
+
+  const list = baseSchedulesForDirect();
+  $("dTarget").innerHTML = list.length
+    ? list.map(s => `<option value="${s.id}">${s.start} ${s.title}${s.place?" · "+s.place:""}</option>`).join("")
+    : '<option value="">선택할 일정이 없습니다</option>';
+  $("dTargetHelp").textContent = list.length ? "" : "선택한 날짜에 정규 일정이 없습니다.";
+  fillDirectFromTarget();
+}
+
+function fillDirectFromTarget(){
+  if($("dKind").value === "add") return;
+  const s = (DATA.schedule||[]).find(x => x.id === $("dTarget").value);
+  if(!s) return;
+  $("dStart").value = s.start || "";
+  $("dEnd").value = s.end || "";
+  $("dPlace").value = s.place || "";
+}
+
+$("directOpen").onclick = () => {
+  const pin = prompt("일정 바로 반영 PIN");
+  if(pin === null) return;
+  if(pin !== ADMIN_PIN){ toast("PIN이 맞지 않습니다"); return; }
+  directPin = pin;
+  $("dDate").value = fmt(new Date());
+  $("dKind").value = "add";
+  $("dKid").value = kidMode === "mje" ? "mje" : "mj";
+  $("dTitle").value = "";
+  $("dStart").value = "";
+  $("dEnd").value = "";
+  $("dPlace").value = "";
+  $("dNote").value = "";
+  fillDirectTarget();
+  show("sheetDirect");
+};
+$("dKind").onchange = fillDirectTarget;
+$("dKid").onchange = fillDirectTarget;
+$("dDate").onchange = fillDirectTarget;
+$("dTarget").onchange = fillDirectFromTarget;
+
+function directLocalObject(o){
+  if(o.kind === "add") return {
+    date:o.date, targetId:"", kind:"add", title:o.title, start:o.start, end:o.end,
+    place:o.place, kid:o.kid, note:o.note
+  };
+  return {
+    date:o.date, targetId:o.targetId, kind:o.kind, title:"",
+    start:o.kind==="change"?o.start:"", end:o.kind==="change"?o.end:"",
+    place:o.kind==="change"?o.place:"", kid:"", note:o.note
+  };
+}
+
+function sameDirectOverride(x,o){
+  if(x.date !== o.date || x.kind !== o.kind) return false;
+  if(o.kind === "add"){
+    return x.title===o.title && x.start===o.start && x.end===o.end &&
+           x.place===o.place && x.kid===o.kid;
+  }
+  if(x.targetId !== o.targetId) return false;
+  if(o.kind === "skip") return true;
+  return x.start===o.start && x.end===o.end && x.place===o.place;
+}
+
+let directSaving = false;
+$("dSend").onclick = async () => {
+  if(directSaving) return;
+  const kind = $("dKind").value;
+  const o = {
+    date:$("dDate").value,
+    kind,
+    kid:$("dKid").value,
+    targetId:kind==="add" ? "" : $("dTarget").value,
+    title:kind==="add" ? $("dTitle").value.trim() : "",
+    start:kind==="skip" ? "" : $("dStart").value,
+    end:kind==="skip" ? "" : $("dEnd").value,
+    place:kind==="skip" ? "" : $("dPlace").value.trim(),
+    note:$("dNote").value.trim()
+  };
+
+  if(!o.date){ toast("날짜를 골라주세요"); return; }
+  if(kind==="add" && !o.title){ toast("일정 이름을 적어주세요"); return; }
+  if(kind!=="skip" && !o.start){ toast("시작 시간을 골라주세요"); return; }
+  if(kind!=="add" && !o.targetId){ toast("변경할 일정을 골라주세요"); return; }
+
+  const base = kind==="add" ? null : (DATA.schedule||[]).find(s=>s.id===o.targetId);
+  const what = kind==="add" ? o.title : (base ? base.title : "기존 일정");
+  const action = kind==="add" ? "추가" : kind==="change" ? "변경" : "이번만 제외";
+  const detail = kind==="skip" ? "" : `\n시간: ${o.start}${o.end?"~"+o.end:""}${o.place?"\n장소: "+o.place:""}`;
+  if(!confirm(`${o.date} · ${KIDS[o.kid]||KIDS[base&&base.kid]}\n${what} · ${action}${detail}\n\n바로 반영할까요?`)) return;
+
+  const before = JSON.parse(JSON.stringify(DATA.overrides||[]));
+  const local = directLocalObject(o);
+  if(kind !== "add"){
+    DATA.overrides = (DATA.overrides||[]).filter(x =>
+      !(x.date===o.date && x.targetId===o.targetId && ["change","skip","cancel"].includes(x.kind))
+    );
+  }
+  DATA.overrides = (DATA.overrides||[]).concat(local);
+  render();
+
+  directSaving = true;
+  $("dSend").disabled = true;
+  hide();
+  toast("일정에 먼저 표시했습니다. 저장 확인 중입니다");
+
+  try{
+    await fetch(API_URL, {method:"POST", mode:"no-cors",
+      body:JSON.stringify({action:"directOverride", pin:directPin, override:o})});
+    await refresh();
+    const saved = (DATA.overrides||[]).some(x => sameDirectOverride(x,o));
+    if(saved) toast("일정에 바로 반영했습니다");
+    else {
+      DATA.overrides = before;
+      render();
+      toast("저장 확인이 안 됐습니다. 다시 시도해 주세요");
+    }
+  }catch(e){
+    DATA.overrides = before;
+    render();
+    toast("저장 확인이 안 됐습니다. 다시 시도해 주세요");
+  }finally{
+    directSaving = false;
+    $("dSend").disabled = false;
+  }
+};
+
 /* ─── 관리자 ─── */
 $("admin").onclick = async () => {
   const pin = prompt("관리자 PIN");
@@ -1107,7 +1307,7 @@ function jsonp(params, base){
 const CACHE_KEY = "mjmje_schedule_v1";
 function saveCache(d){
   try{
-    const {requests, ...rest} = d;
+    const {requests, directEditEnabled, ...rest} = d;
     localStorage.setItem(CACHE_KEY, JSON.stringify({at:Date.now(), d:rest}));
   }catch(e){}
 }
