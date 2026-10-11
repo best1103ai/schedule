@@ -22,6 +22,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body)
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0}
 button.saving{opacity:.58;pointer-events:none}
+.sync-status{font-size:13px;color:var(--mute);margin:0 0 8px;min-height:20px}
+.sync-status[data-phase=error]{color:var(--warn)}
 .write-status{font-size:13px;color:var(--mute);margin:0 0 10px;min-height:20px}
 .write-status:empty{display:none}
 .sync-tools{display:flex;justify-content:flex-end;margin:-4px 0 10px}
@@ -158,9 +160,7 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 
 #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:15px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
 #toast.on{opacity:1}
-body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,transparent,var(--k),transparent);background-size:50% 100%;animation:ld 1s linear infinite;z-index:9}
-@keyframes ld{from{background-position:-50% 0}to{background-position:150% 0}}
-@media (prefers-reduced-motion:reduce){body.busy::before,body.sync::before{animation:none}#toast{transition:none}}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
 
 /* ── 주간 정산 결과 화면 ── */
 .settle-ov{position:fixed;inset:0;background:rgba(20,26,46,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:999;opacity:0;transition:opacity .3s;padding:20px}
@@ -183,7 +183,8 @@ body.busy::before,body.sync::before{content:'';position:fixed;top:0;left:0;heigh
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v17</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v18</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <div id="sync-status" class="sync-status" role="status" aria-live="polite"></div>
   <div id="write-status" class="write-status" role="status" aria-live="polite"></div>
   <nav class="who">
     <button data-act="who" data-v="민준">민준</button>
@@ -212,6 +213,7 @@ const writeQueue = [], pendingWrites = new Map();
 let writeEpoch = 0, writeNotice = '', pumpScheduled = false;
 let lastRefreshAt = 0;
 const perfLog = [];
+const syncInfo = {phase:"idle", started:0, attempt:0, quiet:false, last:Number(ls("syncedAt")) || 0};
 let S = null, busy = false, loadBusy = false, loadQueued = false, PIN = ls('pin') || '', lastRet = null;
 const V = {who: KID_LOCK || ls('who') || '민준', tab: 'today', date: null, open: null, edit: null, wk: null, bk: {}, pinOk: !!(ls('pin'))};
 if(PRAISE_MODE){
@@ -275,7 +277,7 @@ function render(){
   if(!S) return;
   const demo = API_URL ? '' : '<div class="demo">미리보기 모드예요. 새로고침하면 처음으로 돌아가요.</div>';
   $('#app').innerHTML = demo + (PRAISE_MODE ? praiseView() : (V.who === '아빠' ? dadView() : kidView(V.who)));
-  showPendingWrites();
+  showPendingWrites(); showSyncStatus();
   if(perfLog.length){ perfLog[0].renderMs = performance.now() - renderStarted; showPerf(); }
 }
 
@@ -498,37 +500,73 @@ async function jsonp(params, ms){
     perfLog.splice(6); showPerf();
   }
 }
-async function load(attempt){
+function statusTime(t){
+  const d = new Date(t), two = n => String(n).padStart(2,'0');
+  return two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
+}
+function showSyncStatus(){
+  const box = $('#sync-status'); if(!box) return;
+  const elapsed = Math.max(0, Math.floor((Date.now() - syncInfo.started) / 1000));
+  const last = syncInfo.last ? ' · 마지막 확인 ' + statusTime(syncInfo.last) : '';
+  let text;
+  if(syncInfo.phase === 'loading'){
+    text = (syncInfo.quiet && syncInfo.last ? '최근 기록 표시 중 · 자동 갱신 중' :
+      (S ? '지난 기록 표시 중 · 최신 기록 불러오는 중' : '최신 기록 불러오는 중')) +
+      ' (' + elapsed + '초)' + (syncInfo.attempt > 1 ? ' · 재시도 ' + syncInfo.attempt + '/3' : '');
+  }else if(syncInfo.phase === 'error'){
+    text = '최신 기록 확인 실패' + (S ? ' · 지난 기록 표시 중' : '') + ' · 새로고침을 눌러주세요' + last;
+  }else if(syncInfo.phase === 'waiting'){
+    text = '저장 후 최신 기록을 다시 확인합니다' + last;
+  }else if(syncInfo.phase === 'ready'){
+    text = '최신 기록 확인 완료 · ' + statusTime(syncInfo.last);
+  }else{
+    text = (S ? '지난 기록 표시 중' : '최신 기록 확인 준비 중') + last;
+  }
+  box.textContent = text; box.dataset.phase = syncInfo.phase;
+}
+function syncComplete(){
+  syncInfo.last = Date.now(); syncInfo.phase = 'ready';
+  ls('syncedAt', String(syncInfo.last)); showSyncStatus();
+}
+async function load(attempt, quiet){
   attempt = attempt || 1;
-  if(busy || loadBusy){ loadQueued = true; return; }
+  quiet = !!quiet;
+  if(busy || loadBusy){ if(!quiet) loadQueued = true; return; }
   const epoch = writeEpoch, mode = viewMode();
   loadBusy = true; lastRefreshAt = Date.now();
-  document.body.classList.add('sync');
+  syncInfo.phase = 'loading'; syncInfo.started = Date.now(); syncInfo.quiet = quiet;
   try{
-    if(!API_URL){ S = Mock.state(); }
-    else {
-      const j = await jsonp('t=' + Date.now() + '&view=' + encodeURIComponent(mode), 15000);
-      if(busy || epoch !== writeEpoch || mode !== viewMode()){ loadQueued = true; return; }
-      if(j.error) throw new Error(j.error);
-      S = j; ls('state', JSON.stringify(j));
+    for(let n=attempt; n<=3; n++){
+      syncInfo.attempt = n; showSyncStatus();
+      try{
+        const j = !API_URL ? Mock.state() : await jsonp('t=' + Date.now() + '&view=' + encodeURIComponent(mode), 15000);
+        if(busy || epoch !== writeEpoch || mode !== viewMode()){
+          loadQueued = true;
+          // A write response may already have refreshed the screen; keep that confirmation.
+          if(syncInfo.phase === 'loading') syncInfo.phase = 'waiting';
+          return;
+        }
+        if(j.error) throw new Error(j.error);
+        S = j; if(API_URL) ls('state', JSON.stringify(j));
+        syncComplete(); render(); checkSettleEvent(); return;
+      }catch(e){
+        if(busy || epoch !== writeEpoch || mode !== viewMode()){
+          loadQueued = true;
+          if(syncInfo.phase === 'loading') syncInfo.phase = 'waiting';
+          return;
+        }
+        if(n < 3){ await new Promise(resolve => setTimeout(resolve, 1000)); continue; }
+        syncInfo.phase = 'error';
+        if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" data-act="refresh">다시 시도</button></section>`;
+      }
     }
-    render();
-    checkSettleEvent();
-  }catch(e){
-    if(busy || epoch !== writeEpoch || mode !== viewMode()){ loadQueued = true; return; }
-    if(attempt < 3){
-      loadBusy = false;
-      setTimeout(() => load(attempt + 1), 1000);
-      return;
-    }
-    if(!S) $('#app').innerHTML = `<section class="card"><h3>불러오지 못했어요</h3><p class="empty">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></section>`;
-    else toast('최신 내용을 못 불러왔어요. 잠시 후 다시 확인할게요');
   }finally{
-    loadBusy = false;
-    document.body.classList.remove('sync');
-    if(loadQueued && !busy){ loadQueued = false; setTimeout(() => load(), 0); }
+    loadBusy = false; showSyncStatus();
+    if(loadQueued && !busy){ loadQueued=false; setTimeout(() => load(1, true), 0); }
   }
 }
+// Elapsed time is informational, not an animation or an estimate of completion.
+setInterval(() => { if(syncInfo.phase === 'loading') showSyncStatus(); }, 1000);
 
 /* ── 주간 정산 애니메이션 (아이 화면에서, 새 정산 결과를 처음 볼 때 한 번) ── */
 function checkSettleEvent(){
@@ -645,8 +683,9 @@ async function processWrites(){
           throw new Error(res.error || '저장하지 못했어요');
         }
         lastRet = res.ret;
-        if(res.state){ S = res.state; ls('state', JSON.stringify(S)); }
-        else { loadQueued = true; }
+        if(res.state){ S = res.state; ls('state', JSON.stringify(S)); syncComplete(); }
+        else { loadQueued = true; syncInfo.phase='waiting'; }
+        writeNotice = (q.action === 'login' ? '로그인 확인 완료' : q.action === 'approve' ? '승인 저장 완료' : q.action === 'check' ? '체크 저장 완료' : '저장 완료') + ' · ' + statusTime(Date.now());
         ok = true;
       }catch(e){
         // A lost response may still represent a completed server write.
@@ -673,7 +712,7 @@ async function processWrites(){
   }finally{
     busy = false; document.body.classList.remove('busy');
     showPendingWrites();
-    if(loadQueued){ loadQueued=false; setTimeout(() => load(), 0); }
+    if(loadQueued){ loadQueued=false; setTimeout(() => load(1, true), 0); }
   }
 }
 
@@ -733,7 +772,9 @@ document.addEventListener('click', async e => {
   }
 });
 document.addEventListener('keydown', e => { if(e.key === 'Enter' && e.target.id === 'pin') ($('[data-act=plogin]') || $('[data-act=login]')).click(); if(e.key === 'Enter' && e.target.id === 'bt') $('[data-act=book]').click(); });
-document.addEventListener('visibilitychange', () => { if(!document.hidden && !busy) load(); });
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && !busy && (!syncInfo.last || Date.now()-syncInfo.last >= 15000)) load(1, true);
+});
 setInterval(() => {
   if(document.hidden || busy || loadBusy || !API_URL) return;
   const interval = !PRAISE_MODE && V.who === '아빠' && V.pinOk ? 15000 : 60000;
@@ -742,7 +783,7 @@ setInterval(() => {
   const active = document.activeElement;
   if(active && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName)) return;
   if(V.edit) return;
-  load();
+  load(1, true);
 }, 5000);
 
 /* ── 미리보기용 가짜 서버 (API_URL이 비어 있을 때만) ── */
