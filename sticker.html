@@ -183,7 +183,7 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v18</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v19</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <div id="sync-status" class="sync-status" role="status" aria-live="polite"></div>
   <div id="write-status" class="write-status" role="status" aria-live="polite"></div>
   <nav class="who">
@@ -298,10 +298,21 @@ function praiseView(){
   }).join('');
 }
 
+function kidPdView(kid){
+  const p = S.pd && S.pd[kid];
+  if(!p) return '<section class="card"><h3>칭찬 · DP</h3><p class="empty">현황을 확인하지 못했어요. 새로고침해 주세요.</p></section>';
+  const count = value => esc(Number.isFinite(Number(value)) ? Number(value) : 0);
+  return `<section class="card"><h3>이번 주 칭찬 · DP</h3>
+    <div class="tally"><span>👏 칭찬</span><span class="v">${count(p.praise)}개</span><span>이번 주 DP</span><span class="v">${count(p.dp)}개</span><span class="sum">이전 주에서 쌓인 누적 DP</span><span class="v sum">${count(p.누적DP)} / 10</span></div>
+    <p class="empty" style="font-size:13px;padding-bottom:0">매주 일요일 오후 6시에 칭찬과 DP를 정산해요. 남은 DP는 누적돼요.</p>
+    ${p.붕괴 ? `<p class="empty" style="font-size:13px">🌱 다시 시작하기 위한 칭찬 ${count(p.회복칭찬)} / 10</p>` : ''}
+  </section>`;
+}
+
 function kidView(kid){
   const tabs = [['today','오늘 공부'],['board','스티커판'],['week','이번 주']];
   const seg = `<nav class="seg">${tabs.map(([k,l]) => `<button data-act="tab" data-v="${k}" class="${V.tab===k?'on':''}">${l}</button>`).join('')}</nav>`;
-  return seg + (V.tab==='board' ? boardView(kid) : V.tab==='week' ? weekView(kid) : todayView(kid));
+  return kidPdView(kid) + seg + (V.tab==='board' ? boardView(kid) : V.tab==='week' ? weekView(kid) : todayView(kid));
 }
 
 function todayView(kid){
@@ -351,10 +362,10 @@ function boardView(kid){
   const head = `<section class="gifts"><div><div class="n">${g.avail}</div><div class="l">안 쓴 선물 (이미 얻었어요)</div></div>${bigHtml}
     <div class="l" style="margin-top:6px">지금까지 판 ${g.earned}개 완성 · 선물 ${g.used}개 사용</div></section>`;
   const cards = boardsOf(kid).map(b => {
-    const open = V.open === b.항목, p = b.목표 ? Math.min(100, b.cur / b.목표 * 100) : 0;
+    const open = V.open === b.항목, hasTarget = Number(b.목표) > 0, p = hasTarget ? Math.min(100, b.cur / b.목표 * 100) : 0;
     let sheet = '';
-    if(open){ let s = ''; for(let i=0; i<b.목표; i++) s += `<span class="${i<b.cur?'f':''}"></span>`; sheet = `<div class="sheet" aria-label="${b.cur}개 붙임">${s}</div>`; }
-    return `<article class="board"><button class="bh" data-act="open" data-v="${esc(b.항목)}" aria-expanded="${open}"><span class="bn">${esc(b.항목)}</span><span class="bc"><b>${b.cur}</b> / ${b.목표}</span></button><div class="bar"><i style="width:${p}%"></i></div>${b.완료.length ? `<div class="done">완성한 판 ${b.완료.length}개</div>` : ''}${sheet}</article>`;
+    if(open && hasTarget){ let s = ''; for(let i=0; i<b.목표; i++) s += `<span class="${i<b.cur?'f':''}"></span>`; sheet = `<div class="sheet" aria-label="${b.cur}개 붙임">${s}</div>`; }
+    return `<article class="board"><button class="bh" data-act="open" data-v="${esc(b.항목)}" aria-expanded="${open}"><span class="bn">${esc(b.항목)}</span><span class="bc"><b>${b.cur}</b>${hasTarget ? ` / ${b.목표}` : '개 · 목표 설정 대기'}</span></button>${hasTarget ? `<div class="bar"><i style="width:${p}%"></i></div>` : ''}${b.완료.length ? `<div class="done">완성한 판 ${b.완료.length}개</div>` : ''}${sheet}</article>`;
   }).join('');
   return head + cards + '<p class="hint">판을 누르면 스티커를 볼 수 있어요.</p>';
 }
