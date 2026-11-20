@@ -126,6 +126,12 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 .sheet span.f:nth-child(3n){transform:rotate(12deg)}
 .sheet span.f:nth-child(10n){box-shadow:0 0 0 2px var(--k)}
 
+.rewards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.reward{background:var(--paper);border:2px solid var(--k);border-radius:16px;padding:12px 10px;text-align:center}
+.reward .label{font-size:15px}
+.reward .amount{display:block;font-size:34px;font-weight:700;line-height:1.3;color:var(--k);font-variant-numeric:tabular-nums}
+.reward .amount small{font-size:16px;font-weight:400}
+.reward .note{font-size:12px;color:var(--mute)}
 /* 이번 주 */
 .wkhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .wkhead h3{font-size:18px}
@@ -183,7 +189,7 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v19</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v20</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <div id="sync-status" class="sync-status" role="status" aria-live="polite"></div>
   <div id="write-status" class="write-status" role="status" aria-live="polite"></div>
   <nav class="who">
@@ -298,6 +304,15 @@ function praiseView(){
   }).join('');
 }
 
+function kidRewardsView(kid){
+  const p = S.pd && S.pd[kid];
+  const count = value => value !== null && value !== undefined && Number.isFinite(Number(value)) ? esc(Number(value)) : '—';
+  return `<section class="rewards" aria-label="지금 쓸 수 있는 보상">
+    <div class="reward"><div class="label">🎁 남은 선물</div><strong class="amount">${count(p && p.선물)}<small>개</small></strong><div class="note">지금 쓸 수 있어요</div></div>
+    <div class="reward"><div class="label">🍿 남은 책걸이</div><strong class="amount">${count(p && p.책걸이)}<small>개</small></strong><div class="note">간식 파티를 할 수 있어요</div></div>
+  </section>`;
+}
+
 function kidPdView(kid){
   const p = S.pd && S.pd[kid];
   if(!p) return '<section class="card"><h3>칭찬 · DP</h3><p class="empty">현황을 확인하지 못했어요. 새로고침해 주세요.</p></section>';
@@ -312,7 +327,7 @@ function kidPdView(kid){
 function kidView(kid){
   const tabs = [['today','오늘 공부'],['board','스티커판'],['week','이번 주']];
   const seg = `<nav class="seg">${tabs.map(([k,l]) => `<button data-act="tab" data-v="${k}" class="${V.tab===k?'on':''}">${l}</button>`).join('')}</nav>`;
-  return kidPdView(kid) + seg + (V.tab==='board' ? boardView(kid) : V.tab==='week' ? weekView(kid) : todayView(kid));
+  return kidRewardsView(kid) + kidPdView(kid) + seg + (V.tab==='board' ? boardView(kid) : V.tab==='week' ? weekView(kid) : todayView(kid));
 }
 
 function todayView(kid){
