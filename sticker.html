@@ -189,7 +189,7 @@ h1,h2,h3,.r{font-family:var(--round);font-weight:400;margin:0}
 </head>
 <body>
 <div class="wrap">
-  <header class="top"><h1>스티커판 <span class="ver">v20</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
+  <header class="top"><h1>스티커판 <span class="ver">v21</span></h1><a id="sched" href="./index.html">📅 스케줄 보기</a></header>
   <div id="sync-status" class="sync-status" role="status" aria-live="polite"></div>
   <div id="write-status" class="write-status" role="status" aria-live="polite"></div>
   <nav class="who">
@@ -216,7 +216,7 @@ const KID_LOCK = ({mj:'민준', me:'민재'})[new URLSearchParams(location.searc
 const PRAISE_MODE = new URLSearchParams(location.search).get('praise') === '1';
 const DOW = '일월화수목금토';
 const writeQueue = [], pendingWrites = new Map();
-let writeEpoch = 0, writeNotice = '', pumpScheduled = false;
+let writeEpoch = 0, writeNotice = '', pumpScheduled = false, lastPdDuplicate = false;
 let lastRefreshAt = 0;
 const perfLog = [];
 const syncInfo = {phase:"idle", started:0, attempt:0, quiet:false, last:Number(ls("syncedAt")) || 0};
@@ -254,7 +254,8 @@ function dayStatus(kid, d){
   const q = +S.settings['할당량_'+kid] || 0; let ok = 0, wait = 0;
   S.items[kid].forEach(i => { const r = recOf(kid, d, i.항목, 'daily'); if(r && r.상태==='승인') ok++; else if(r && r.상태==='대기') wait++; });
   const hw = (recOf(kid, d, '내일숙제', 'hw') || {}).상태 || '';
-  return {q, ok, wait, hw, game: ok >= q && hw === '승인'};
+  const praise = Number((S.dailyPraise && S.dailyPraise[kid] && S.dailyPraise[kid][d]) || 0);
+  return {q, ok, wait, praise, credit:ok+praise, hw, game: ok + praise >= q && hw === '승인'};
 }
 function boardsOf(kid){
   const order = S.items[kid].map(i => i.항목);
@@ -295,7 +296,7 @@ function praiseView(){
     const st = dayStatus(kid, S.today);
     const g = giftInfo(kid);
     const header = `<h3><span class="pill ${KC[kid]}">${kid}</span>${p ? ` <span class="s">이번 주 칭찬 ${p.praise}개</span>` : ''}</h3>`;
-    const todayLine = `<p class="empty" style="padding:0 0 6px">오늘 ${st.ok}/${st.q}개 체크 · 숙제 ${st.hw==='승인' ? '확인됨' : st.hw==='대기' ? '확인 대기' : '아직'}${collapsed ? '' : ` · 안 쓴 선물 ${g.avail}개`}</p>`;
+    const todayLine = `<p class="empty" style="padding:0 0 6px">오늘 공부 ${st.ok} + 칭찬 ${st.praise} / 약속 ${st.q}개 · 숙제 ${st.hw==='승인' ? '확인됨' : st.hw==='대기' ? '확인 대기' : '아직'}${collapsed ? '' : ` · 안 쓴 선물 ${g.avail}개`}</p>`;
     const boardsHtml = collapsed
       ? `<p class="empty" style="padding-top:0">스티커판이 쉬고 있어요 (칭찬 ${p.회복칭찬}/10 모이면 다시 시작해요)</p>`
       : boardsOf(kid).map(b => `<div class="brow"><span>${esc(b.항목)}</span><span class="c">${Number(b.목표)>0 ? `${b.cur}/${b.목표}` : '목표 정하는 중'}</span></div>`).join('');
@@ -338,17 +339,17 @@ function todayView(kid){
 
   /* 게임 가능 여부는 지금 어떤 날짜를 보고 있든 항상 '오늘' 기준으로 고정 */
   const tSt = dayStatus(kid, S.today), mins = +S.settings['게임분'] || 30;
-  let tSlots = ''; for(let i=0; i<tSt.q; i++) tSlots += `<span class="slot ${i<tSt.ok?'ok':i<tSt.ok+tSt.wait?'wait':''}"></span>`;
+  let tSlots = ''; for(let i=0; i<tSt.q; i++) tSlots += `<span class="slot ${i<tSt.credit?'ok':i<tSt.credit+tSt.wait?'wait':''}"></span>`;
   tSlots += `<span class="slot hw ${tSt.hw==='승인'?'ok':tSt.hw==='대기'?'wait':''}">${tSt.hw==='승인'?'':'숙'}</span>`;
-  const tNeed = Math.max(0, tSt.q - tSt.ok - tSt.wait);
+  const tNeed = Math.max(0, tSt.q - tSt.credit - tSt.wait);
   let title, msg;
-  if(tSt.game){ title = `게임 ${mins}분 해도 돼요!`; msg = `오늘 공부 ${tSt.ok}개 · 내일 숙제까지 아빠가 확인했어요.`; }
+  if(tSt.game){ title = `게임 ${mins}분 해도 돼요!`; msg = `오늘 공부 ${tSt.ok}개 + 칭찬 ${tSt.praise}개 · 내일 숙제까지 아빠가 확인했어요.`; }
   else if(tNeed === 0 && tSt.hw && tSt.hw !== '반려'){ title = '아빠 확인을 기다려요'; msg = '오늘 다 체크했어요. 확인되면 게임 시간이 생겨요.'; }
   else {
     title = tNeed > 0 ? `${tNeed}개 더 하면 게임 ${mins}분` : `내일 숙제만 남았어요`;
     msg = (tSt.hw && tSt.hw !== '반려') ? '내일 숙제는 체크했어요.' : '게임하려면 오늘 학교·학원 숙제도 끝내야 해요.';
   }
-  const hero = `<section class="game"><div class="when">오늘 기준 · 약속 ${tSt.q}개</div><h2>${title}</h2><div class="slots">${tSlots}</div><p>${msg}</p></section>`;
+  const hero = `<section class="game"><div class="when">오늘 기준 · 약속 ${tSt.q}개 · 공부 ${tSt.ok} + 칭찬 ${tSt.praise}</div><h2>${title}</h2><div class="slots">${tSlots}</div><p>${msg}</p></section>`;
 
   /* 체크리스트는 선택한 날짜(d) 기준 — 지난 날짜는 스티커만 채워지고 오늘 게임 여부와는 무관 */
   const backfillNote = d !== S.today ? `<p class="empty" style="padding:8px 0 0">📌 지금 체크하는 건 <b>${md(d)} ${dow(d)}요일</b> 분이에요 — 스티커에는 들어가지만, 오늘 게임 여부와는 상관없어요.</p>` : '';
@@ -708,7 +709,7 @@ async function processWrites(){
           stop = true;
           throw new Error(res.error || '저장하지 못했어요');
         }
-        lastRet = res.ret;
+        lastRet = res.ret; lastPdDuplicate = !!res.pdDuplicate;
         if(res.state){ S = res.state; ls('state', JSON.stringify(S)); syncComplete(); }
         else { loadQueued = true; syncInfo.phase='waiting'; }
         writeNotice = (q.action === 'login' ? '로그인 확인 완료' : q.action === 'approve' ? '승인 저장 완료' : q.action === 'check' ? '체크 저장 완료' : '저장 완료') + ' · ' + statusTime(Date.now());
@@ -761,7 +762,7 @@ document.addEventListener('click', async e => {
     case 'cancel': await call('cancel', {id}, b); break;
     case 'login': PIN = $('#pin').value.trim(); if(await call('login', {}, b)){ V.pinOk = true; ls('pin', PIN); render(); } break;
     case 'plogin': PIN = $('#pin').value.trim(); V.pinOk = true; render(); break;
-    case 'praise2': { if(await call('praise', {kid: v}, b)) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'praise2': { if(await call('praise', {kid: v}, b)) lastPdDuplicate ? toast('최근 2분 안에 받은 칭찬이 있어 추가하지 않았어요') : toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
     case 'undopd': { if(await call('cancelPd', {id: v}, b)) toast('되돌렸어요'); break; }
     case 'logout': PIN = ''; ls('pin',''); V.pinOk = false; render(); break;
     case 'bk': V.bk[id] = +v; render(); break;
@@ -779,8 +780,8 @@ document.addEventListener('click', async e => {
       if(await call('useGift', {kid: $('#gk').value, count: $('#gn').value, content: $('#gc').value}, b)) toast('선물 사용을 기록했어요');
       break;
     }
-    case 'praise': { if(await call('praise', {kid: v}, b)) toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
-    case 'dp': { if(await call('dp', {kid: v}, b)) toastUndo(v + ' DP +1', lastRet); break; }
+    case 'praise': { if(await call('praise', {kid: v}, b)) lastPdDuplicate ? toast('최근 2분 안에 받은 칭찬이 있어 추가하지 않았어요') : toastUndo(v + ' 칭찬 +1 👏', lastRet); break; }
+    case 'dp': { if(await call('dp', {kid: v}, b)) lastPdDuplicate ? toast('최근 2분 안에 받은 DP가 있어 추가하지 않았어요') : toastUndo(v + ' DP +1', lastRet); break; }
     case 'settlenow': { if(await call('settleNow', {}, b)) toast('정산했어요'); break; }
     case 'bookdone': {
       if(await call('bookdone', {kid: $('#bkk').value}, b)) toast('책걸이 +1');
